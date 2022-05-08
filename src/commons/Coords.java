@@ -8,16 +8,18 @@ import java.util.Comparator;
  *
  */
 
+/* Coords staticCoords = new Coords(); */
+
 public class Coords {
     /* static */ int MAX_X = 17_630;
     /* static */ int MAX_Y = 9_000;
 
-    int x;
-    int y;
+    double x;
+    double y;
 
     public Coords() {}
 
-    public Coords(int x, int y) {
+    public Coords(double x, double y) {
         super();
         this.x = x;
         this.y = y;
@@ -86,8 +88,7 @@ public class Coords {
 
     Coords doVtranslation(Coords from, double distance) {
         double angle = getVAngle();
-        return new Coords(from.x + (int) Math.floor(Math.cos(angle) * distance),
-                from.y + (int) Math.floor(Math.sin(angle) * distance));
+        return new Coords(from.x + Math.cos(angle) * distance, from.y + Math.sin(angle) * distance);
     }
 
     /* static */ Comparator<Coords> duPlusProcheAuPlusLoin(Coords base) {

@@ -43,8 +43,8 @@ public class JUnitTest {
         assertEquals(350, to3.y);
 
         Coords to4 = from.getPointOppose(to, 500);
-        assertEquals(-384, to4.x);
-        assertEquals(-151, to4.y);
+        assertEquals(-383, to4.x);
+        assertEquals(-150, to4.y);
 
         Coords to4b = from.getPointVers(to, 250);
         assertEquals(266, to4b.x);
@@ -130,7 +130,7 @@ public class JUnitTest {
     }
     
     @Test
-    public void testLine() throws Exception {
+    public void testDroite() throws Exception {
         {
             Pion m = new Pion();
             m.x = 0;
@@ -205,6 +205,41 @@ public class JUnitTest {
         
     }
     
+    @Test
+    public void testAngleEnDegres() throws Exception {
+        assertEquals(45, new AngleEnDegres(90).ajoute(-45).angle);
+        assertEquals(-170, new AngleEnDegres(100).ajoute(90).angle);
+        
+        assertEquals(-45, new AngleEnDegres(-90).ajoute(45).angle);
+        assertEquals(-135, new AngleEnDegres(-90).ajoute(-45).angle);
+
+        assertEquals(170, new AngleEnDegres(-100).retire(90).angle);
+        assertEquals(170, new AngleEnDegres(-100).ajoute(-90).angle);
+        
+        assertTrue(new AngleEnDegres(70).estProcheDe(60, 20));
+        assertTrue(new AngleEnDegres(-110).estProcheDe(-120, 20));
+        assertFalse(new AngleEnDegres(70).estProcheDe(-60, 40));
+        
+        assertEquals(Math.PI/4, new AngleEnDegres(45).toRadian());
+        assertEquals(45, new AngleEnDegres().ofRadian(Math.PI/4).angle);
+    }
+    
+    @Test
+    public void testCourbeDeBezierOrdre2() throws Exception {
+        CourbeDeBezierOrdre2 cdb = new CourbeDeBezierOrdre2(new Coords(2500, 2700), new Coords(4750, 2700), new Coords(4750, 150));
+        List<Coords> points = cdb.getPoints(10);
+        points.forEach(System.out::println);
+        assertEquals(11, points.size());
+        
+        System.out.println("hypothenuse: "+new Coords(2500, 2700).distance(new Coords(4750, 150)));
+        assertEquals(4100, cdb.getLongueur());
+        assertEquals(9, cdb.nbSegmentsPourDistanceMax(500));
+        
+        List<Coords> points2 = cdb.getPointsPourDistanceMax(500);
+        assertEquals(10, points2.size());
+        points2.forEach(System.out::println);
+    }
+        
     private static void assertEquals(double v1, double v2) throws Exception {
         String s1 = ""+v1;
         if (s1.length() > 3) s1 = s1.substring(0, 4);

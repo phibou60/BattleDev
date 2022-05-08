@@ -39,9 +39,9 @@ public class Pion extends Coords {
     }
     
     Line getLine() {
-        int a = v.y;
-        int b = -v.x;
-        int c = -( a * x + b * y);
+        double a = v.y;
+        double b = -v.x;
+        double c = -( a * x + b * y);
         return new Line(a, b, c);
         
     }
