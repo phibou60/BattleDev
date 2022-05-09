@@ -8,6 +8,16 @@ import java.util.*;
  * Use less Fossil Fuel.
  **/
 class Player {
+
+    // Params
+    private static double DISTANCE_POINTS_DE_PASSAGE = 1_000D; // Fonctionne pour 500 à 2000
+    private static double ALT_FORCAGE_ATTERRISSAGE_LIGNE_DROITE = 100;
+    private static double VITESSE_MINIMALE = 50;
+    private static int ALGO_CALCUL_V_ACCELERATION = 1;
+    private static int HORIZON = 4;
+    private static int MAX_DELTA_ANGLE = 60; 
+
+    boolean ALGO_CALCUL_VITESSE_PAR_SEGMENT = false;
     
     static final double g = -3.711;
 
@@ -19,24 +29,11 @@ class Player {
     int F;
     int R;
     int P;
-
-    // Params
-    double DISTANCE_POINTS = 500D;
-    double ALT_ATTERRISSAGE = 200;
-    int ALGO = 1;
-    int HORIZON = 4;
-    int SYSTEME_ANTI_CRASH = 1;
-    int VIT_H = 80;
-    boolean ALGO_SIMPLE_ATTER = false;
-    boolean ALGO_ATTER_EXCENTRE = true;
-    int MAX_DELTA_ANGLE = 80; 
-
+    
     // State
     boolean premierPassage = true;
     Coords position;
     Coords ptAtterrissage;
-    int ptAttDebut;
-    int ptAttFin;
     LinkedList<PtPassage> ptPassages = null;
     
     // Result
@@ -82,124 +79,24 @@ class Player {
             return;
 
         // Recherche du point d'atterrissage
+        // Il n'est pas au millieu du segment plat mais a 3/4 en opposition.
 
         ptAtterrissage = null;
         for (int i = 0; i < pointsSol.size() - 1; i++) {
             if (pointsSol.get(i).y == pointsSol.get(i + 1).y) {
-                ptAtterrissage = new Coords((pointsSol.get(i).x + pointsSol.get(i + 1).x) / 2, pointsSol.get(i).y);
-                
-                if (ALGO_ATTER_EXCENTRE) {
-                    log("pt d'atterrissage excentré vs ", (pointsSol.get(i).x + pointsSol.get(i + 1).x) / 2);
-                    double x = (pointsSol.get(i).x + pointsSol.get(i + 1).x) / 2;
-                    if (X < x) {
-                        x = (x + pointsSol.get(i+1).x) / 2;
-                    } else {
-                        x = (pointsSol.get(i).x + x) / 2;
-                    }
-                    ptAtterrissage = new Coords(x, pointsSol.get(i).y);
-                    log(" > recalcul: ", f(x));
-                }
-                
-                ptAttDebut = (int) pointsSol.get(i).x + 50;
-                ptAttFin = (int) pointsSol.get(i+1).x - 50;
+                double p = 0.25;
+                if (X < pointsSol.get(i).x) p = 0.75;
+                ptAtterrissage = pointsSol.get(i).pointSurSegment(pointsSol.get(i+1), p);
             }
         }
-
-        creatPtPassages();
         
         Coords vecteurVitActuel = new Coords(HS, VS);
         log("Vecteur Vitesses actuel : ", vecteurVitActuel.showVector());
         double vitActuelle = vecteurVitActuel.getVNorme();
-        
-        boolean DEFAUT = true;
-        
-        if (!DEFAUT && pointsSol.size() == 7 && position.x == 2500) {
-            log("*** carte 01");
-            ALGO = 1;
-            SYSTEME_ANTI_CRASH = 0;
-            ALT_ATTERRISSAGE = 100;
-            HORIZON = 4;
-            if (vitActuelle < 40 ) vitActuelle = 40;
-            Fonction f = new Fonction(new Coords(1, vitActuelle), new Coords(ptPassages.size() - 1, 19));
-            for (int i = 0; i < ptPassages.size(); i++) {
-                ptPassages.get(i).vx = f.predict(i);
-                log("ptPassages.get(i).vx:", ptPassages.get(i).vx);
-            }
-        } else if (!DEFAUT && pointsSol.size() == 10) {
-            log("*** carte 02");
-            ALGO = 1;
-            SYSTEME_ANTI_CRASH = 0;
-            ALT_ATTERRISSAGE = 100;
-            HORIZON = 4;
-            VIT_H = (int) vitActuelle;
-            Fonction f = new Fonction(new Coords(1, VIT_H), new Coords(ptPassages.size() - 1, 19));
-            for (int i = 0; i < ptPassages.size(); i++) {
-                ptPassages.get(i).vx = f.predict(i);
-                log("ptPassages.get(i).vx:", ptPassages.get(i).vx);
-            }
-        } else if (!DEFAUT && pointsSol.size() == 7 && position.x == 6500) {
-            log("*** carte 03");
-            ALGO = 1;
-            ALGO_SIMPLE_ATTER = false;
-            SYSTEME_ANTI_CRASH = 0;
-            ALT_ATTERRISSAGE = 100;
-            HORIZON = 4;
-            ALGO_ATTER_EXCENTRE = true;
-            MAX_DELTA_ANGLE = 60;
-            if (vitActuelle < 40 ) vitActuelle = 40;
-            Fonction f = new Fonction(new Coords(0, vitActuelle), new Coords(ptPassages.size() - 1, 0));
-            Fonction fv = new Fonction(new Coords(0, 20), new Coords(ptPassages.size() - 1, 39));
-            for (int i = 0; i < ptPassages.size(); i++) {
-                ptPassages.get(i).vx = f.predict(i);
-                ptPassages.get(i).vy = fv.predict(i);
-                log(" > vx:", ptPassages.get(i).vx, ", vy:", ptPassages.get(i).vy);
-            }
-        } else if (!DEFAUT && pointsSol.size() == 20 && HS == 100) {
-            log("*** carte 04");
-            ALGO = 1;
-            ALGO_SIMPLE_ATTER = false;
-            SYSTEME_ANTI_CRASH = 0;
-            ALT_ATTERRISSAGE = 100;
-            HORIZON = 4;
-            if (vitActuelle < 40 ) vitActuelle = 40;
-            vitActuelle = 80;
-            Fonction f = new Fonction(new Coords(1, vitActuelle), new Coords(ptPassages.size() - 1, 19));
-            for (int i = 0; i < ptPassages.size(); i++) {
-                ptPassages.get(i).vx = f.predict(i);
-                log("ptPassages.get(i).vx:", ptPassages.get(i).vx);
-            }
+        if (vitActuelle < VITESSE_MINIMALE) vitActuelle = VITESSE_MINIMALE;
 
-        } else if (!DEFAUT && pointsSol.size() == 20 && HS == -50) {
-            log("*** carte 05");
-            ALGO = 1;
-            ALGO_SIMPLE_ATTER = false;
-            SYSTEME_ANTI_CRASH = 0;
-            ALT_ATTERRISSAGE = 100;
-            HORIZON = 4;
-            if (vitActuelle < 40 ) vitActuelle = 40;
-            Fonction f = new Fonction(new Coords(1, vitActuelle), new Coords(ptPassages.size() - 1, 19));
-            for (int i = 0; i < ptPassages.size(); i++) {
-                ptPassages.get(i).vx = f.predict(i);
-                log("ptPassages.get(i).vx:", ptPassages.get(i).vx);
-            }
-       } else {
-            ALGO = 1;
-            ALGO_SIMPLE_ATTER = false;
-            SYSTEME_ANTI_CRASH = 0;
-            ALT_ATTERRISSAGE = 100;
-            HORIZON = 4;
-            ALGO_ATTER_EXCENTRE = true;
-            MAX_DELTA_ANGLE = 60;
-            if (vitActuelle < 40 ) vitActuelle = 40;
-            Fonction f = new Fonction(new Coords(0, vitActuelle), new Coords(ptPassages.size() - 1, 0));
-            Fonction fv = new Fonction(new Coords(0, 20), new Coords(ptPassages.size() - 1, 39));
-            for (int i = 0; i < ptPassages.size(); i++) {
-                ptPassages.get(i).vx = f.predict(i);
-                ptPassages.get(i).vy = fv.predict(i);
-                log(" > vx:", ptPassages.get(i).vx, ", vy:", ptPassages.get(i).vy);
-            }
-        }
-          
+        creatPtPassages(vitActuelle);
+         
         premierPassage = false;
 
     }
@@ -217,32 +114,34 @@ class Player {
 
         Coords vecteurVitCible = null;;
         
-        if (ALGO == 1) {
+        if (ALGO_CALCUL_V_ACCELERATION == 1) {
             // Vecteur de vitesse optimal
             double angle = vecteurDir.getVAngle();
             vecteurVitCible = new Coords(Math.cos(angle) * cible.vx, Math.sin(angle) * cible.vy);
             log("Vecteur vitesse: ", vecteurVitCible.showVector());
         }
 
-        if (ALGO == 2) {
+        if (ALGO_CALCUL_V_ACCELERATION == 2) {
+            /*
+             * Cet algorithme, pourtant plus logique combiné à ALGO_CALCUL_VITESSE_PAR_SEGMENT,
+             * ne fonctionne pas car contrairement 
+             * à l'algo 1, il permet des vitesses verticales trop grandes que le vaisseau
+             * n'arrive pas à corriger par la suite. 
+             */
             Coords vecteurVitActuel = new Coords(HS, VS);
             log("Vecteur Vitesses actuel : ", vecteurVitActuel.showVector());
-
-            double vitCible = vecteurVitActuel.getVNorme();
-            if (vitCible < 40) vitCible = 40;
-            if (vitCible > 100) vitCible = 100;
-
-            vecteurVitCible = new Coords().createVFromFormeTrigono(vecteurDir.getVAngle(), vitCible);
+            double vitesseCible = Math.sqrt(cible.vx * cible.vx + cible.vy * cible.vy);  
+            
+            vecteurVitCible = new Coords().createVFromFormeTrigono(vecteurDir.getVAngle(), vitesseCible);
             log("Vecteur Vitesses cible : ", vecteurVitCible.showVector());
             if (vecteurVitCible.y < -39) vecteurVitCible.y = -39;
         }
-
 
         // Equations horaires de l'état actuel
         EquationHoraire deplV = new EquationHoraire(Y, VS, g);
         EquationHoraire deplH = new EquationHoraire(X, HS, 0);
 
-        // Vecteur d'accélération pour atteindre le vectuer vitesse optimal
+        // Vecteur d'accélération pour atteindre le vecteur vitesse cible
         double ha = deplH.quelAccellerationPourVitesse(vecteurVitCible.x, HORIZON);
         double va = deplV.quelAccellerationPourVitesse(vecteurVitCible.y, HORIZON);
         Coords vecteurAcc = new Coords(ha, va);
@@ -251,50 +150,28 @@ class Player {
         vecteurAcc.y -= g;
         log(" > correction g:", vecteurAcc.showVector());
 
-        // Système anti-crash
-
-        if (SYSTEME_ANTI_CRASH == 1) { 
-            EquationHoraire deplV2 = new EquationHoraire(Y, VS, vecteurAcc.y);
-            double t = deplV2.tempsPourAtteindre(ptAtterrissage.y);
-            log("Temps pour atteindre le sol:", f(t));
-            double v = deplV2.getVitesseEnTemps(t);
-            log(" > Vitesse:", f(v));
-        }
-
-        if (SYSTEME_ANTI_CRASH == 2) {
-            double t = deplV.quelTempsPourRalentissement(-39, 4+g);
-            log("TempsPourRalentissement:", f(t));
-            double posFuture = deplV.getPositionEnTemps(t);
-            log("position future + 10s:", f(posFuture+10));
-        
-            if (t > 0 && posFuture < ptAtterrissage.y) {
-                vecteurAcc.x = 0;
-                vecteurAcc.y = 4;
-                log("!!!! Risque de crash !! : correction:", vecteurAcc.showVector());
-            }
-        }
-
         commandesSuivantes(vecteurAcc);   
     }
     
     void commandesSuivantes(Coords vecteurAcc) {
         // On ne peut pas mettre les réacteurs vers le bas
         if (vecteurAcc.y < 0) vecteurAcc.y = 0;
-        // Iversion du sens de la réaction
+        // Inversion du sens de la réaction vs la direction
         Coords vecteurReact = new Coords(-vecteurAcc.x, -vecteurAcc.y);
         log("Reaction: ", vecteurReact.showVector());
          
         // Détermination de l'angle
         
         AngleEnDegres angleDegre;
-        if (Y - ptAtterrissage.y < ALT_ATTERRISSAGE) {
+        if (Y - ptAtterrissage.y < ALT_FORCAGE_ATTERRISSAGE_LIGNE_DROITE) {
+            // Forçage atterrisage en ligne droite
             log("Ground ", Y - ptAtterrissage.y);
             angleDegre = new AngleEnDegres(0);
         } else {
             angleDegre = new AngleEnDegres().ofRadian(vecteurReact.getVAngle());
             log("reaction angle(degres): ", angleDegre);
+            // Remise dans le référentiel du jeu
             angleDegre.ajoute(90);
-            //log("remise dans le ref du jeu: ", angleDegre);
         }
         newAngle = angleDegre.getIntAngle();
         normalizeAngle();
@@ -305,11 +182,14 @@ class Player {
         normalizeThrust();
         
         if (!angleDegre.estProcheDe(newAngle, MAX_DELTA_ANGLE) && newThrust > 0) {
-            log("Pas de thrust car l'angle n'est pas le bon.", newAngle, "pour", angleDegre);
+            log("Pas de thrust car l'angle est trop éloigné de l'idéal.", newAngle, "pour", angleDegre);
             newThrust = 0;
+            normalizeThrust();
         } else if (vecteurReact.getVNorme() < 0.5) {
             log("Remise a zero de l'angle car le thrust est proche de zéro");
-            newAngle = angleDegre.getIntAngle();
+            // Quand il n'y a pas de thrust antant remettre l'angle à zéro.
+            // Pas sur que ce cas soit utilisé en réalité.
+            newAngle = 0;
             normalizeAngle();
         }
 
@@ -331,14 +211,6 @@ class Player {
         double DISTANCE_CIBLE_ATTEINTE= 100D;
         double RATIO_ABANDON_CIBLE= 1.2D;
         
-        if (ALGO_SIMPLE_ATTER) {
-            if (X >= ptAttDebut && X <= ptAttFin && Y < ptAtterrissage.y + 1500) {
-                log("!! Forçage atterissage");
-                //ALGO_SIMPLE_ATTER = false;
-                return new PtPassage(X, ptAtterrissage.y, 20, 59);
-            }
-        }
-        
         PtPassage ptPassageSuivant = ptPassages.peek();
         
         // Abandon du point de passage en cours et choix du point de passage suivant
@@ -347,8 +219,8 @@ class Player {
         if (ptPassages.size() > 1) {
             if (position.distance(ptPassageSuivant) < DISTANCE_CIBLE_ATTEINTE
                     || position.distance(ptPassages.get(1)) < ptPassages.get(0).distance(ptPassages.get(1)) * RATIO_ABANDON_CIBLE) {
-                ptPassages.poll();
-                ptPassageSuivant = ptPassages.peek();
+                ptPassages.removeFirst();
+                ptPassageSuivant = ptPassages.getFirst();
                 log("Changement target:", ptPassageSuivant);
             }
         }
@@ -356,24 +228,31 @@ class Player {
         return ptPassageSuivant;
     }
 
-    private void creatPtPassages() {
+    private void creatPtPassages(double vitesseInit) {
         ptPassages = new LinkedList<>();
         
         CourbeDeBezierOrdre2 cdb = new CourbeDeBezierOrdre2(position, new Coords(ptAtterrissage.x, position.y), ptAtterrissage);
-        List<Coords> points = cdb.getPointsPourDistanceMax(DISTANCE_POINTS);
+        List<Coords> pointsCdb = cdb.getPointsPourDistanceMax(DISTANCE_POINTS_DE_PASSAGE);
         
-        points.stream().skip(1).forEach(p ->
-            ptPassages.add(new PtPassage(p.x, p.y, VIT_H, 39))
-        );
+        // Forçage "artificiel" de la vitesse horizontale pour qu'elle descende à zéro 
+        Fonction fh = new Fonction(new Coords(1, vitesseInit), new Coords(pointsCdb.size() - 1, 0));
         
-        double somDistance = 0;
-        for (int i=1; i <points.size(); i++) {
-            log("Distance:", f(points.get(i-1).distance(points.get(i))));
-            somDistance += points.get(i-1).distance(points.get(i));
+        // Forçage "artificiel" de la vitesse vertical à 20 et montée progressive à 39. 
+        Fonction fv = new Fonction(new Coords(0, 20), new Coords(pointsCdb.size() - 1, 39));
+        
+        Fonction f = new Fonction(new Coords(1, vitesseInit), new Coords(pointsCdb.size() - 1, 39));
+        
+        for (int i = 0; i < pointsCdb.size(); i++) {
+            Coords p = pointsCdb.get(i);
+            double sh = fh.predict(i);
+            double sv = fv.predict(i);
+            if (ALGO_CALCUL_VITESSE_PAR_SEGMENT && i > 0) {
+                Coords vecteur = pointsCdb.get(i-1).createVecteurTo(pointsCdb.get(i));
+                sh = Math.abs(Math.cos(vecteur.getVAngle()) * f.predict(i));
+                sv = Math.abs(Math.sin(vecteur.getVAngle()) * f.predict(i));
+            }
+            ptPassages.add(new PtPassage(p.x, p.y, sh, sv));
         }
-        log("somDistance:", f(somDistance));
-        log("Distance cdb:", f(cdb.getLongueur()));
-        
         ptPassages.forEach(Player::log);
     }
     
@@ -450,18 +329,34 @@ class Player {
 
         /**
          * Pour cette instance de Coords, retourne un point opposé à la base à une
-         * certaine distance TODO : ajout d'un controle si on sort de la carte ou pas
+         * certaine distance
+         * TODO : code pas clair. Ne faudrait-il pas inverser le calcul entre les 2 méthodes ?
+         * TODO : ajout d'un controle si on sort de la carte ou pas
          * 
          * @param base     Point opposé à celui qu'on veut calculer
          * @param distance Distance du point que l'on veut à partir d'ici
          */
         Coords getPointOppose(Coords base, double distance) {
-            Coords vector2d = createVFromPoints(base, this);
+            Coords vector2d = base.createVecteurTo(this);
             return vector2d.doVtranslation(this, distance);
         }
 
-        Coords getPointVers(Coords base, double distance) {
+        Coords getAuDelaDe(Coords base, double distance) {
             return getPointOppose(base, -distance);
+        }
+        
+        /**
+         * Calcul un point entre 2 points ou en dehors dans une direction ou une autre.
+         * 
+         * @param 2ème point du segment
+         * @param p Si entre 0 et le point est entre les bornes du segment.
+         *          si 0.5, alors le point est au millieu.
+         *          si 2 alors le point est à une fois la longueur du segment dans la direction de c2 opposé à this..
+         *          si -2 alors le point est à une fois la longueur du segment dans la direction de this opposé à c2.
+         * @return
+         */
+         Coords pointSurSegment(Coords c2, double p) {
+            return new Coords (this.x + (c2.x - this.x) * p, this.y + (c2.y - this.y) * p);
         }
         
         String f(double value) {
@@ -473,8 +368,11 @@ class Player {
             return "Coords [x=" + f(x) + ", y=" + f(y) + "]";
         }
 
-        // ---- Fonctions vectorielles (on considère ici que l'objet Coords est un
-        // vecteur)
+        // ---- Fonctions vectorielles (on considère ici que l'objet Coords est un vecteur)
+
+        /* static */ Coords createVFromFormeTrigono(double angle, double norme) {
+            return new Coords(Math.cos(angle) * norme, Math.sin(angle) * norme);
+        }
         
         Coords createVecteurTo(Coords to) {
             return new Coords(to.x - x, to.y - y);
@@ -482,14 +380,6 @@ class Player {
         
         Coords createVecteurFrom(Coords from) {
             return new Coords(x - from.x, y - from.y);
-        }
-
-        /* static */ Coords createVFromPoints(Coords from, Coords to) {
-            return new Coords(to.x - from.x, to.y - from.y);
-        }
-
-        /* static */ Coords createVFromFormeTrigono(double angle, double norme) {
-            return new Coords(Math.cos(angle) * norme, Math.sin(angle) * norme);
         }
 
         double getVNorme() {

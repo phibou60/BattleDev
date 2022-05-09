@@ -1,7 +1,10 @@
 package codingame.marslander;
 
 import java.io.InputStream;
-
+/**
+ * Dernière passe = 22h43
+ *
+ */
 public class PlayerTest {
 
     public static void main(String args[]) {
