@@ -28,7 +28,7 @@ public class JUnitTest {
         
         assertEquals(999, from.distance(to));
         
-        Coords vector1 = from.createVFromPoints(from, to);
+        Coords vector1 = from.createVecteurTo(to);
         assertEquals(866, vector1.x);
         assertEquals(500, vector1.y);
         assertEquals(999, vector1.getVNorme());
@@ -42,13 +42,13 @@ public class JUnitTest {
         assertEquals(483, to3.x);
         assertEquals(350, to3.y);
 
+        Coords to4b = from.getAuDelaDe(to, 250);
+        assertEquals(1132, to4b.x);
+        assertEquals(725, to4b.y);
+
         Coords to4 = from.getPointOppose(to, 500);
         assertEquals(-383, to4.x);
         assertEquals(-150, to4.y);
-
-        Coords to4b = from.getPointVers(to, 250);
-        assertEquals(266, to4b.x);
-        assertEquals(225, to4b.y);
 
         Coords vector2 = staticCoords.createVFromFormeTrigono(vector1.getVAngle(), 1_000D);
         assertEquals(866, vector2.x);
@@ -138,14 +138,14 @@ public class JUnitTest {
             m.v.x = 3;
             m.v.y = 1;
             
-            Line l1 = m.getLine();
+            Droite l1 = m.getLine();
             assertEquals(1, l1.a);
             assertEquals(-3, l1.b);
             assertEquals(3, l1.c);
             
             Coords base = new Coords(2, 5);
             
-            Line l2 = l1.getLineOrthogonale(base);
+            Droite l2 = l1.getLineOrthogonale(base);
             assertEquals(-3, l2.a);
             assertEquals(-1, l2.b);
             assertEquals(11, l2.c);
@@ -161,8 +161,8 @@ public class JUnitTest {
             assertTrue(m.willFallIntoBase(base));
         }
         {
-            Line l1 = new Line(1, 0, -50);
-            Line l2 = new Line(1, -1, 0);
+            Droite l1 = new Droite(1, 0, -50);
+            Droite l2 = new Droite(1, -1, 0);
             Coords inters = l1.getIntersection(l2);
             assertEquals(50, inters.x);
             assertEquals(50, inters.y);
@@ -171,7 +171,7 @@ public class JUnitTest {
             assertEquals(50, inters.x);
             assertEquals(50, inters.y);
            
-            Line l3 = new Line(0, 1, -50);
+            Droite l3 = new Droite(0, 1, -50);
             inters = l1.getIntersection(l3);
             assertEquals(50, inters.x);
             assertEquals(50, inters.y);
@@ -189,13 +189,13 @@ public class JUnitTest {
             assertEquals(50, inters.y);
             
             // Lignes parallèle
-            Line l1b = new Line(1, 0, -500);
+            Droite l1b = new Droite(1, 0, -500);
             inters = l1.getIntersection(l1b);
             assertNull(inters);
             inters = l1b.getIntersection(l1);
             assertNull(inters);
 
-            Line l3b = new Line(0, 1, -500);
+            Droite l3b = new Droite(0, 1, -500);
             inters = l3.getIntersection(l3b);
             assertNull(inters);
             inters = l3b.getIntersection(l3);

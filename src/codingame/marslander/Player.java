@@ -10,14 +10,13 @@ import java.util.*;
 class Player {
 
     // Params
-    private static double DISTANCE_POINTS_DE_PASSAGE = 1_000D; // Fonctionne pour 500 à 2000
-    private static double ALT_FORCAGE_ATTERRISSAGE_LIGNE_DROITE = 100;
+    private static double DISTANCE_POINTS_DE_PASSAGE = 1_000D; // Fonctionne de 500 à 2000
+    private static double ALTITUDE_FORCAGE_ATTERRISSAGE_LIGNE_DROITE = 100;
     private static double VITESSE_MINIMALE = 50;
-    private static int ALGO_CALCUL_V_ACCELERATION = 1;
+    private static int ALGO_CALCUL_VECTEUR_VITESSE = 1;
     private static int HORIZON = 4;
-    private static int MAX_DELTA_ANGLE = 60; 
-
-    boolean ALGO_CALCUL_VITESSE_PAR_SEGMENT = false;
+    private static int MAX_DELTA_ANGLE_POUR_AUTORISER_LE_THRUST = 60; 
+    private static boolean ALGO_CALCUL_VITESSE_PAR_SEGMENT = false;
     
     static final double g = -3.711;
 
@@ -72,34 +71,6 @@ class Player {
         }
         
     }
-    
-    private void initPremierPassage() {
-
-        if (!premierPassage)
-            return;
-
-        // Recherche du point d'atterrissage
-        // Il n'est pas au millieu du segment plat mais a 3/4 en opposition.
-
-        ptAtterrissage = null;
-        for (int i = 0; i < pointsSol.size() - 1; i++) {
-            if (pointsSol.get(i).y == pointsSol.get(i + 1).y) {
-                double p = 0.25;
-                if (X < pointsSol.get(i).x) p = 0.75;
-                ptAtterrissage = pointsSol.get(i).pointSurSegment(pointsSol.get(i+1), p);
-            }
-        }
-        
-        Coords vecteurVitActuel = new Coords(HS, VS);
-        log("Vecteur Vitesses actuel : ", vecteurVitActuel.showVector());
-        double vitActuelle = vecteurVitActuel.getVNorme();
-        if (vitActuelle < VITESSE_MINIMALE) vitActuelle = VITESSE_MINIMALE;
-
-        creatPtPassages(vitActuelle);
-         
-        premierPassage = false;
-
-    }
 
     private void strategie() {
         position = new Coords(X, Y);
@@ -108,20 +79,20 @@ class Player {
         PtPassage cible = getPtPassageSuivant();
         log("cible: ", cible);
         
-        // Vecteur de direction
+        // Vecteur de direction vers la cible
         Coords vecteurDir = position.createVecteurTo(cible);
         log("Vecteur de direction: ", vecteurDir.showVector());
 
         Coords vecteurVitCible = null;;
         
-        if (ALGO_CALCUL_V_ACCELERATION == 1) {
+        if (ALGO_CALCUL_VECTEUR_VITESSE == 1) {
             // Vecteur de vitesse optimal
             double angle = vecteurDir.getVAngle();
             vecteurVitCible = new Coords(Math.cos(angle) * cible.vx, Math.sin(angle) * cible.vy);
             log("Vecteur vitesse: ", vecteurVitCible.showVector());
         }
 
-        if (ALGO_CALCUL_V_ACCELERATION == 2) {
+        if (ALGO_CALCUL_VECTEUR_VITESSE == 2) {
             /*
              * Cet algorithme, pourtant plus logique combiné à ALGO_CALCUL_VITESSE_PAR_SEGMENT,
              * ne fonctionne pas car contrairement 
@@ -137,13 +108,9 @@ class Player {
             if (vecteurVitCible.y < -39) vecteurVitCible.y = -39;
         }
 
-        // Equations horaires de l'état actuel
-        EquationHoraire deplV = new EquationHoraire(Y, VS, g);
-        EquationHoraire deplH = new EquationHoraire(X, HS, 0);
-
-        // Vecteur d'accélération pour atteindre le vecteur vitesse cible
-        double ha = deplH.quelAccellerationPourVitesse(vecteurVitCible.x, HORIZON);
-        double va = deplV.quelAccellerationPourVitesse(vecteurVitCible.y, HORIZON);
+        double ha = (vecteurVitCible.x - HS) / HORIZON;
+        double va = (vecteurVitCible.y - VS) / HORIZON;
+        
         Coords vecteurAcc = new Coords(ha, va);
         log("Vecteur acceleration:", vecteurAcc.showVector());
         
@@ -151,6 +118,37 @@ class Player {
         log(" > correction g:", vecteurAcc.showVector());
 
         commandesSuivantes(vecteurAcc);   
+    }
+    
+    private void initPremierPassage() {
+
+        if (!premierPassage)
+            return;
+
+        // Recherche du point d'atterrissage
+        // Il n'est pas au millieu du segment mais a 3/4 en opposition de l'arrivée.
+
+        ptAtterrissage = null;
+        for (int i = 0; i < pointsSol.size() - 1; i++) {
+            if (pointsSol.get(i).y == pointsSol.get(i + 1).y) {
+                double p = 0.25;
+                if (X < pointsSol.get(i).x) p = 0.75;
+                ptAtterrissage = pointsSol.get(i).pointSurSegment(pointsSol.get(i+1), p);
+            }
+        }
+        
+        // Détermination vitesse initiale pour déterminer les pts de passage et la vitesse
+        // qui leur est associée.
+        
+        Coords vecteurVitActuel = new Coords(HS, VS);
+        log("Vecteur Vitesses actuel : ", vecteurVitActuel.showVector());
+        double vitActuelle = vecteurVitActuel.getVNorme();
+        if (vitActuelle < VITESSE_MINIMALE) vitActuelle = VITESSE_MINIMALE;
+
+        creatPtPassages(vitActuelle);
+         
+        premierPassage = false;
+
     }
     
     void commandesSuivantes(Coords vecteurAcc) {
@@ -163,7 +161,7 @@ class Player {
         // Détermination de l'angle
         
         AngleEnDegres angleDegre;
-        if (Y - ptAtterrissage.y < ALT_FORCAGE_ATTERRISSAGE_LIGNE_DROITE) {
+        if (Y - ptAtterrissage.y < ALTITUDE_FORCAGE_ATTERRISSAGE_LIGNE_DROITE) {
             // Forçage atterrisage en ligne droite
             log("Ground ", Y - ptAtterrissage.y);
             angleDegre = new AngleEnDegres(0);
@@ -181,7 +179,7 @@ class Player {
         newThrust = Math.round(vecteurReact.getVNorme());
         normalizeThrust();
         
-        if (!angleDegre.estProcheDe(newAngle, MAX_DELTA_ANGLE) && newThrust > 0) {
+        if (!angleDegre.estProcheDe(newAngle, MAX_DELTA_ANGLE_POUR_AUTORISER_LE_THRUST) && newThrust > 0) {
             log("Pas de thrust car l'angle est trop éloigné de l'idéal.", newAngle, "pour", angleDegre);
             newThrust = 0;
             normalizeThrust();
@@ -260,54 +258,6 @@ class Player {
         return String.format("%.2f", value);
     }
     
-    class EquationHoraire {
-        double X;
-        double V;
-        double A;
-        
-        public EquationHoraire(double x, double v, double a) {
-            super();
-            X = x;
-            V = v;
-            A = a;
-        }
-        
-        double getPositionEnTemps(double t) {
-            return (A * t * t / 2) + (V * t) + X;
-        }
-        
-        double getVitesseEnTemps(double t) {
-            return (A * t) + V;
-        }
-        
-        double quelAccellerationPourVitesse(double v, double t) {
-            return (v - V) / t; 
-        }
-        
-        double tempsPourAtteindre(double cible) {
-            double derniereDist = Double.MAX_VALUE;
-            for (int t=1; t<=300; t++) {
-                double position = getPositionEnTemps(t);
-                if ((X > cible && position < cible) || (X < cible && position > cible)) {
-                    return t;
-                }
-            }
-            return -1;
-        }
-        
-        /**
-         * Calcul du temps nécessaire pour ralentir.
-         * @param v Vitesse cible
-         * @param a Puissance de freinage maximum que l'on dispose
-         * @return temps en secondes
-         */
-        double quelTempsPourRalentissement(double v, double a) {
-            log("V: ", V, ", v:", v, ", a:", a);
-            double deltaV = v - V;
-            return deltaV / a;
-        }
-        
-    }
     
     public class Coords {
 
@@ -358,14 +308,10 @@ class Player {
          Coords pointSurSegment(Coords c2, double p) {
             return new Coords (this.x + (c2.x - this.x) * p, this.y + (c2.y - this.y) * p);
         }
-        
-        String f(double value) {
-            return String.format("%.2f", value);
-        }
-
+ 
         @Override
         public String toString() {
-            return "Coords [x=" + f(x) + ", y=" + f(y) + "]";
+            return String.format("Coords [x=%.2f, y=%.2f]", x, y);
         }
 
         // ---- Fonctions vectorielles (on considère ici que l'objet Coords est un vecteur)
@@ -401,7 +347,7 @@ class Player {
         }
         
         public String showVector() {
-            return "Vecteur [x=" + f(x) + ", y=" + f(y) + ", angle=" + f(getVAngle()) + ", dist=" + f(getVNorme()) + "]";
+            return String.format("Coords [x=%.2f, y=%.2f, angle=%.2f, norme=%.2f]", x, y, getVAngle(), getVNorme());
         }
 
     }

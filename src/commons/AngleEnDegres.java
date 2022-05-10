@@ -18,11 +18,12 @@ public class AngleEnDegres {
         this.angle = 0;
     }
 
-    /* static */ public AngleEnDegres ofRadian(double radian) {
+    /* Constructeur a partir de radian */
+    public AngleEnDegres ofRadian(double radian) {
         double temp = (radian / (2 * Math.PI)) * 360; 
         return new AngleEnDegres(temp);
     }
-
+    
     public double toRadian() {
         return (angle / 360) * (2 * Math.PI); 
     }
@@ -30,6 +31,7 @@ public class AngleEnDegres {
     int getIntAngle() {
         return new Double(angle).intValue();
     }
+    
     
     @Override
     public AngleEnDegres clone() {
@@ -60,7 +62,7 @@ public class AngleEnDegres {
 
     @Override
     public String toString() {
-        return "AngleEnDegres [angle=" + angle + "]";
+        return String.format("%.2f", angle);
     }
     
 }
