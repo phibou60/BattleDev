@@ -73,6 +73,10 @@ public class Coords {
      Coords pointSurSegment(Coords c2, double p) {
         return new Coords (this.x + (c2.x - this.x) * p, this.y + (c2.y - this.y) * p);
     }
+     
+    boolean equals(Coords c2) {
+        return x == c2.x && y == c2.y; 
+    }
 
     @Override
     public String toString() {

@@ -4,20 +4,19 @@ import java.io.InputStream;
 import java.util.*;
 
 /**
- * Tout est dans le calcul des points de passage.
+ * Save the Planet.
+ * Use less Fossil Fuel.
  **/
-class Player {
+class Player2 {
 
     // Params
-
-    private static final int DISTANCE_AU_LARGE_DU_PT_D_INFLEXION = 500;
-    private static final int ALTITUDE_SURVOL = 300;
-
+    private static double DISTANCE_POINTS_DE_PASSAGE = 1_000D; // Fonctionne de 500 à 2000
     private static double ALTITUDE_FORCAGE_ATTERRISSAGE_LIGNE_DROITE = 100;
-    private static double VITESSE_MINIMALE = 20;
+    private static double VITESSE_MINIMALE = 50;
     private static int ALGO_CALCUL_VECTEUR_VITESSE = 1;
     private static int HORIZON = 4;
     private static int MAX_DELTA_ANGLE_POUR_AUTORISER_LE_THRUST = 60; 
+    private static boolean ALGO_CALCUL_VITESSE_PAR_SEGMENT = false;
     
     static final double g = -3.711;
 
@@ -39,9 +38,6 @@ class Player {
     // Result
     long newThrust;
     long newAngle;
-    private Coords coordsPlat1;
-    private Coords coordsPlat2;
-    private int dirDepl;
     
     void joue(InputStream inStream) {
         Scanner in = new Scanner(inStream);
@@ -135,16 +131,12 @@ class Player {
         ptAtterrissage = null;
         for (int i = 0; i < pointsSol.size() - 1; i++) {
             if (pointsSol.get(i).y == pointsSol.get(i + 1).y) {
-                ptAtterrissage = pointsSol.get(i).pointSurSegment(pointsSol.get(i+1), 0.5);
-                coordsPlat1 = pointsSol.get(i);
-                coordsPlat2 = pointsSol.get(i+1);
+                double p = 0.25;
+                if (X < pointsSol.get(i).x) p = 0.75;
+                ptAtterrissage = pointsSol.get(i).pointSurSegment(pointsSol.get(i+1), p);
             }
         }
-        log("ptAtterrissage:", ptAtterrissage);
         
-        dirDepl = 1;
-        if (X > ptAtterrissage.x) dirDepl = -1;
-            
         // Détermination vitesse initiale pour déterminer les pts de passage et la vitesse
         // qui leur est associée.
         
@@ -158,77 +150,7 @@ class Player {
         premierPassage = false;
 
     }
-
-    private void creatPtPassages(double vitesseInit) {
-        ptPassages = new LinkedList<>();
-
-        Coords ptInflexion= null; // Pt a partir duquel on est en vue du pt d'atterrissage
-        int altitudeSurvol = 0; // Altitude de survol du plus au point avant le pt d'inflexion
-        int dirAtter = 0; // Direction pt d'atterrissage (1 pour x croissant, -1 sinon) 
-
-        // Droite directe entre le pt étudié et le pt d'atterrissage pour savoir
-        // s'il y a des points du sol au dessus.
-        Fonction vueSurPtAtterrissage = new Fonction(position, ptAtterrissage); 
-        
-        // Boucle sur les points du sol
-       
-        Iterator<Coords> iterator = pointsSol.iterator();
-        if (dirDepl == -1) iterator = pointsSol.descendingIterator();
-        
-        while (iterator.hasNext()) {
-            Coords pointSol = iterator.next();
-            log(" > pointSol:", pointSol);
     
-            // On saute les points du sol avant la position du vaisseau
-            if ((pointSol.x - X) * dirDepl < 0) continue;  
-            
-            // A-t-on atteint le segment plat du pt d'atterrissage ?
-            if (pointSol.equals(coordsPlat1) || pointSol.equals(coordsPlat2)) {
-                break;
-            }
-            
-            // Recherche du plus au point et calcul de l'altitude de survol
-            if (pointSol.y + ALTITUDE_SURVOL > altitudeSurvol) {
-                altitudeSurvol = (int) pointSol.y + ALTITUDE_SURVOL;
-            }
-
-            // Choix du point d'inflexion.
-            // S'il n'y en a pas encore, par défaut on prend le premier qui vient.
-            // Sinon on cherche à savoir si le point du sol étudié est au dessus de la droite
-            // qui part du pt d'inflexion et qui va vers le pt d'atterrissage.
-            // Attention, dans le cas ou la caverne est inversée vis-à-vis du déplacement
-            // dirDepl et dirAtter sont inversés et le test s'inverse.
-            // On vérifie alors que les points sont au-dessus de la droite.
-            
-            if (ptInflexion == null
-                    || (pointSol.y - vueSurPtAtterrissage.predict(pointSol.x)) * dirDepl * dirAtter > 0) {
-                ptInflexion = pointSol;
-                vueSurPtAtterrissage = new Fonction(ptInflexion, ptAtterrissage);
-                dirAtter = (ptInflexion.x < ptAtterrissage.x) ? 1 : -1;
-            }
-        }
-        
-        log("ptInflexion:", ptInflexion);
-                
-        ptPassages.add(new PtPassage(X, Y, 0, 0));
-        ptPassages.add(new PtPassage(ptInflexion.x, altitudeSurvol, 0, 0));
-        ptPassages.add(new PtPassage(ptInflexion.x+DISTANCE_AU_LARGE_DU_PT_D_INFLEXION*dirDepl, ptInflexion.y, 0, 0));
-        ptPassages.add(new PtPassage(ptAtterrissage.x, ptAtterrissage.y, 0, 0));
-        
-        // Forçage "artificiel" de la vitesse horizontale pour qu'elle descende à zéro 
-        Fonction fh = new Fonction(new Coords(1, vitesseInit), new Coords(ptPassages.size() - 1, 20));
-        
-        // Forçage "artificiel" de la vitesse vertical à 20 et montée progressive à 39. 
-        Fonction fv = new Fonction(new Coords(0, 20), new Coords(ptPassages.size() - 1, 39));
-        
-        for (int i = 0; i < ptPassages.size(); i++) {
-            PtPassage ptPassage = ptPassages.get(i);
-            ptPassage.vx = fh.predict(i);
-            ptPassage.vy = fv.predict(i);
-        }
-        ptPassages.forEach(Player::log);
-    }
-   
     void commandesSuivantes(Coords vecteurAcc) {
         // On ne peut pas mettre les réacteurs vers le bas
         if (vecteurAcc.y < 0) vecteurAcc.y = 0;
@@ -294,8 +216,7 @@ class Player {
         
         if (ptPassages.size() > 1) {
             if (position.distance(ptPassageSuivant) < DISTANCE_CIBLE_ATTEINTE
-                    //|| position.distance(ptPassages.get(1)) < ptPassages.get(0).distance(ptPassages.get(1)) * RATIO_ABANDON_CIBLE
-                    ) {
+                    || position.distance(ptPassages.get(1)) < ptPassages.get(0).distance(ptPassages.get(1)) * RATIO_ABANDON_CIBLE) {
                 ptPassages.removeFirst();
                 ptPassageSuivant = ptPassages.getFirst();
                 log("Changement target:", ptPassageSuivant);
@@ -303,6 +224,34 @@ class Player {
         }
 
         return ptPassageSuivant;
+    }
+
+    private void creatPtPassages(double vitesseInit) {
+        ptPassages = new LinkedList<>();
+        
+        CourbeDeBezierOrdre2 cdb = new CourbeDeBezierOrdre2(position, new Coords(ptAtterrissage.x, position.y), ptAtterrissage);
+        List<Coords> pointsCdb = cdb.getPointsPourDistanceMax(DISTANCE_POINTS_DE_PASSAGE);
+        
+        // Forçage "artificiel" de la vitesse horizontale pour qu'elle descende à zéro 
+        Fonction fh = new Fonction(new Coords(1, vitesseInit), new Coords(pointsCdb.size() - 1, 0));
+        
+        // Forçage "artificiel" de la vitesse vertical à 20 et montée progressive à 39. 
+        Fonction fv = new Fonction(new Coords(0, 20), new Coords(pointsCdb.size() - 1, 39));
+        
+        Fonction f = new Fonction(new Coords(1, vitesseInit), new Coords(pointsCdb.size() - 1, 39));
+        
+        for (int i = 0; i < pointsCdb.size(); i++) {
+            Coords p = pointsCdb.get(i);
+            double sh = fh.predict(i);
+            double sv = fv.predict(i);
+            if (ALGO_CALCUL_VITESSE_PAR_SEGMENT && i > 0) {
+                Coords vecteur = pointsCdb.get(i-1).createVecteurTo(pointsCdb.get(i));
+                sh = Math.abs(Math.cos(vecteur.getVAngle()) * f.predict(i));
+                sv = Math.abs(Math.sin(vecteur.getVAngle()) * f.predict(i));
+            }
+            ptPassages.add(new PtPassage(p.x, p.y, sh, sv));
+        }
+        ptPassages.forEach(Player2::log);
     }
     
     String f(double value) {
@@ -331,6 +280,8 @@ class Player {
         /**
          * Pour cette instance de Coords, retourne un point opposé à la base à une
          * certaine distance
+         * TODO : code pas clair. Ne faudrait-il pas inverser le calcul entre les 2 méthodes ?
+         * TODO : ajout d'un controle si on sort de la carte ou pas
          * 
          * @param base     Point opposé à celui qu'on veut calculer
          * @param distance Distance du point que l'on veut à partir d'ici
@@ -357,11 +308,7 @@ class Player {
          Coords pointSurSegment(Coords c2, double p) {
             return new Coords (this.x + (c2.x - this.x) * p, this.y + (c2.y - this.y) * p);
         }
-         
-        boolean equals(Coords c2) {
-            return x == c2.x && y == c2.y; 
-        }
-        
+ 
         @Override
         public String toString() {
             return String.format("Coords [x=%.2f, y=%.2f]", x, y);
@@ -486,6 +433,52 @@ class Player {
         }
         
     }
+    
+    public class CourbeDeBezierOrdre2 {
+
+        Coords a1;
+        Coords a2;
+        Coords a3;
+        
+        public CourbeDeBezierOrdre2(Coords a1, Coords a2, Coords a3) {
+            super();
+            this.a1 = a1;
+            this.a2 = a2;
+            this.a3 = a3;
+        }
+        
+        public List<Coords> getPoints(int nbSegments) {
+            List<Coords> ret = new ArrayList<>();
+            double step = 1D / nbSegments;
+            double t = 0;
+            
+            for (int i = 0; i <= nbSegments; i++) { 
+                double x = ((1-t) * (1-t) * a1.x) + (2 * t * (1-t) * a2.x) + (t * t * a3.x);
+                double y = ((1-t) * (1-t) * a1.y) + (2 * t * (1-t) * a2.y) + (t * t * a3.y);
+                ret.add(new Coords(x, y));
+                
+                t += step;
+            }
+            return ret;
+        }
+        
+        /**
+         * Estimation de la longueur de manière empirique. 
+         */
+        public double getLongueur() {
+            return (a1.distance(a2) + a2.distance(a3) + a1.distance(a3)) / 2;
+        }
+        
+        public int nbSegmentsPourDistanceMax(double distance) {
+            return (int) Math.floor(getLongueur() / distance) + 1; 
+        }
+        
+        public List<Coords> getPointsPourDistanceMax(double distance) {
+            int nbSegments = nbSegmentsPourDistanceMax(distance);
+            return getPoints(nbSegments);
+        }
+        
+    }
 
     public class Fonction {
         double a;
@@ -530,7 +523,7 @@ class Player {
     }
     
     public static void main(String args[]) {
-        Player player = new Player();
+        Player2 player = new Player2();
         player.joue(System.in);
     }
    
