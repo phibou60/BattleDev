@@ -1,24 +1,24 @@
 package commons;
 
-public class Line {
+public class Droite {
     // Sous forme d'équation cartésienne : ax + by + c = 0
     double a;
     double b;
     double c;
     
-    public Line(double a, double b, double c) {
+    public Droite(double a, double b, double c) {
         super();
         this.a = a;
         this.b = b;
         this.c = c;
     }
     
-    Line getLineOrthogonale(Coords point) {
-        return new Line(b, -a, -(b * point.x + -a * point.y));
+    Droite getLineOrthogonale(Coords point) {
+        return new Droite(b, -a, -(b * point.x + -a * point.y));
     }
     
     // Peut être null si les lignes sont parallèles
-    Coords getIntersection(Line l2) {
+    Coords getIntersection(Droite l2) {
         Coords inters = new Coords();
         //log("Intersection: "+toString()+" vs "+l2);
         

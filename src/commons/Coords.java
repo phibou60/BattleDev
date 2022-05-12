@@ -8,16 +8,18 @@ import java.util.Comparator;
  *
  */
 
+/* Coords staticCoords = new Coords(); */
+
 public class Coords {
     /* static */ int MAX_X = 17_630;
     /* static */ int MAX_Y = 9_000;
 
-    int x;
-    int y;
+    double x;
+    double y;
 
     public Coords() {}
 
-    public Coords(int x, int y) {
+    public Coords(double x, double y) {
         super();
         this.x = x;
         this.y = y;
@@ -41,35 +43,58 @@ public class Coords {
     }
 
     /**
-     * Pour cette instance de Coords, retourne un point opposé à la base à une
-     * certaine distance TODO : ajout d'un controle si on sort de la carte ou pas
-     * 
-     * @param base     Point opposé à celui qu'on veut calculer
-     * @param distance Distance du point que l'on veut à partir d'ici
+     * Retourne un point au dela du point2.
+     * TODO : ajout d'un controle si on sort de la carte ou pas
      */
-    Coords getPointOppose(Coords base, double distance) {
-        Coords vector2d = createVFromPoints(base, this);
-        return vector2d.doVtranslation(this, distance);
+
+    Coords getAuDelaDe(Coords point2, double distance) {
+        Coords vector2d = createVecteurTo(point2);
+        return vector2d.doVtranslation(point2, distance);
     }
 
-    Coords getPointVers(Coords base, double distance) {
-        return getPointOppose(base, -distance);
+    /**
+     * Retourne un point opposé au point2.
+     */
+    
+    Coords getPointOppose(Coords point2, double distance) {
+        return point2.getAuDelaDe(this, distance);
+    }
+    
+    /**
+     * Calcul un point entre 2 points ou en dehors dans une direction ou une autre.
+     * 
+     * @param 2ème point du segment
+     * @param p Si entre 0 et le point est entre les bornes du segment.
+     *          si 0.5, alors le point est au millieu.
+     *          si 2 alors le point est à une fois la longueur du segment dans la direction de c2 opposé à this..
+     *          si -2 alors le point est à une fois la longueur du segment dans la direction de this opposé à c2.
+     * @return
+     */
+     Coords pointSurSegment(Coords c2, double p) {
+        return new Coords (this.x + (c2.x - this.x) * p, this.y + (c2.y - this.y) * p);
+    }
+     
+    boolean equals(Coords c2) {
+        return x == c2.x && y == c2.y; 
     }
 
     @Override
     public String toString() {
-        return "Coords [x=" + x + ", y=" + y + "]";
+        return String.format("Coords [x=%.2f, y=%.2f]", x, y);
     }
-
-    // ---- Fonctions vectorielles (on considère ici que l'objet Coords est un
-    // vecteur)
-
-    /* static */ Coords createVFromPoints(Coords from, Coords to) {
-        return new Coords(to.x - from.x, to.y - from.y);
-    }
+    
+    // ---- Fonctions vectorielles (on considère ici que l'objet Coords est un vecteur)
 
     /* static */ Coords createVFromFormeTrigono(double angle, double norme) {
         return new Coords((int) Math.floor(Math.cos(angle) * norme), (int) Math.floor(Math.sin(angle) * norme));
+    }
+    
+    Coords createVecteurTo(Coords to) {
+        return new Coords(to.x - x, to.y - y);
+    }
+    
+    Coords createVecteurFrom(Coords from) {
+        return new Coords(x - from.x, y - from.y);
     }
 
     double getVNorme() {
@@ -86,8 +111,7 @@ public class Coords {
 
     Coords doVtranslation(Coords from, double distance) {
         double angle = getVAngle();
-        return new Coords(from.x + (int) Math.floor(Math.cos(angle) * distance),
-                from.y + (int) Math.floor(Math.sin(angle) * distance));
+        return new Coords(from.x + Math.cos(angle) * distance, from.y + Math.sin(angle) * distance);
     }
 
     /* static */ Comparator<Coords> duPlusProcheAuPlusLoin(Coords base) {
@@ -96,6 +120,10 @@ public class Coords {
 
     /* static */ Comparator<Coords> duPlusLoinAuPlusProche(Coords base) {
         return new DistanceToBaseComparator(base, -1);
+    }
+    
+    public String showVector() {
+        return String.format("Coords [x=%.2f, y=%.2f, angle=%.2f, norme=%.2f]", x, y, getVAngle(), getVNorme());
     }
 
 }

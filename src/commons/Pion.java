@@ -23,8 +23,8 @@ public class Pion extends Coords {
     Coords getProjeteOrthogonal(Coords base) {
         // Pb (cas limitte) :
         // vérifier que le monstre ne sort pas de la carte avant d'entrer dans le puits de gravité 
-        Line thisLine = getLine();
-        Line orthogonalLine = thisLine.getLineOrthogonale(base);
+        Droite thisLine = getLine();
+        Droite orthogonalLine = thisLine.getLineOrthogonale(base);
         Coords inters = thisLine.getIntersection(orthogonalLine);
         //log(" >>> inters: "+inters);
         return inters;
@@ -38,11 +38,11 @@ public class Pion extends Coords {
         return ret;
     }
     
-    Line getLine() {
-        int a = v.y;
-        int b = -v.x;
-        int c = -( a * x + b * y);
-        return new Line(a, b, c);
+    Droite getLine() {
+        double a = v.y;
+        double b = -v.x;
+        double c = -( a * x + b * y);
+        return new Droite(a, b, c);
         
     }
     
