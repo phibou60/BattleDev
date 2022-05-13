@@ -2,6 +2,7 @@ package codingame.deathfirstsearch;
 
 import java.io.InputStream;
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Auto-generated code below aims at helping you parse
@@ -9,161 +10,81 @@ import java.util.*;
  **/
 class Player {
 
-    static int nbNoeuds = 0;
-    static int nbArretes = 0;
-    static int[][] graphe = null;
-    static int[] distances = null; 
+    int nbSommets = 0;
+    int nbArcs = 0;
     
-    static int nbExits = 0;
-    static int[] exits = null; 
+    int nbExits = 0;
+    int[] exits = null;
+    
+    GrapheResolveur gr;
+    
+    // Solution
+    int from;
+    int to;
     
     void joue(InputStream inStream) {
+        Scanner in = new Scanner(inStream);
         boolean debug = true;
         
-        Scanner in = new Scanner(System.in);
-        nbNoeuds = in.nextInt(); // the total number of nodes in the level, including the gateways
-        nbArretes = in.nextInt(); // the number of links
+        nbSommets = in.nextInt(); // the total number of nodes in the level, including the gateways
+        nbArcs = in.nextInt(); // the number of links
         nbExits = in.nextInt(); // the number of exit gateways
-        if (debug) System.err.println(""+nbNoeuds+" "+nbArretes+" "+nbExits);
+        System.err.println(""+nbSommets+" "+nbArcs+" "+nbExits);
         
-        graphe = new int[nbArretes][4];
-        exits = new int[nbExits];
+        gr = new GrapheResolveur(nbSommets);
         
-        for (int i = 0; i < nbArretes; i++) {
+        for (int i = 0; i < nbArcs; i++) {
             int n1 = in.nextInt(); // N1 and N2 defines a link between these nodes
             int n2 = in.nextInt();
-            if (debug) System.err.println(""+n1+" "+n2);
-            graphe[i] = new int[] {n1, n2, 1, 1};
+            System.err.println(""+n1+" "+n2);
+            
+            gr.ajoutArc(n1, n2);
         }
+        
+        exits = new int[nbExits];
         
         for (int i = 0; i < nbExits; i++) {
             exits[i] = in.nextInt(); // the index of a gateway node
-            if (debug) System.err.println(""+exits[i]);
+            System.err.println(""+exits[i]);
         }
 
         // game loop
         while (true) {
             int n = in.nextInt(); // The index of the node on which the Skynet agent is positioned this turn
-            if (debug) System.err.println(""+n);
+            System.err.println(""+n);
             
-            int from = 0;
-            int to = 0;
-            int min = Integer.MAX_VALUE;
+            strategie(n);
             
-            for (int i = 0; i < nbExits; i++) {
-                ArrayList<Integer> parcours = calculParcoursLePlusCourt(n, exits[i]);
-                if (parcours != null) {
-                    if (debug) System.err.println("parcours: "+toString(parcours));
-                    if (parcours.size() < min) {
-                        min = parcours.size();
-                        from = parcours.get(parcours.size()-2);
-                        to = parcours.get(parcours.size()-1);
-                    }
-                }
-            }
-            
-            // Supprimer l'arrete dans le graphe
-            for (int i=0; i<nbArretes; i++) {
-                if ((graphe[i][0] == from && graphe[i][1] == to)
-                 || (graphe[i][1] == from && graphe[i][0] == to)) {
-                    graphe[i][2] = -1;
-                    graphe[i][3] = -1;
-                }
-            }
-
             System.out.println(from+" "+to);
+            gr.suppressArc(from, to);
         }
         
     }
-    
-    static ArrayList<Integer> calculParcoursLePlusCourt(int depart, int dest) {
-        distances = new int[nbNoeuds];
-        Arrays.fill(distances, Integer.MAX_VALUE);
-
-        ArrayList<Integer> parcours = new ArrayList<>();
-        parcours.add(depart);
-        return calculParcoursLePlusCourt(parcours, dest);
-    }
-    
-    // Attention considère distance = 1
-    static ArrayList<Integer> calculParcoursLePlusCourt(ArrayList<Integer> parcours, int dest) {
-        boolean debug = false;
-        if (debug) System.err.println("Parcours: "+toString(parcours));
-        int dernierNoeud = parcours.get(parcours.size()-1);
-        ArrayList<int[]> noeudsSuivants = getNoeudsSuivantsAvecLaDistance(dernierNoeud);
-        if (debug) System.err.println(" > noeudsSuivants: "+toString(noeudsSuivants));
-
-        for (int[] suiv : noeudsSuivants) {
-            if (suiv[0] == dest) {
-                parcours.add(dest);
-                return parcours;
+        
+    private void strategie(int n) {
+        
+        // Recherche de la sortie la plus proche pour le virus et blocage du dernier arc
+        // qui permet d'atteindre cette sortie.
+        
+        int lgLePlusCourt = Integer.MAX_VALUE;
+        LinkedList<Integer> cheminLePlusCourt = null;
+        
+        for (int i = 0; i < exits.length; i++) {
+            int lg = gr.cheminLePlusCourt(n, exits[i]);
+            if (lg < lgLePlusCourt) {
+                log("cheminLePlusCourt:", lg);
+                cheminLePlusCourt = gr.chemin();
+                lgLePlusCourt = lg;
             }
         }
         
-        ArrayList<Integer> meilleurParcours = null;
-        for (int[] suiv : noeudsSuivants) {
-            if (!parcours.contains(suiv[0])) { // Pas très utile sauf pour le debug !
-                if (parcours.size() < distances[suiv[0]]) {
-                    distances[suiv[0]] = parcours.size();
-                    if (debug) System.err.println(" > min distance du noeud ("+suiv[0]+") = "+parcours.size());
-
-                    ArrayList<Integer> nouvParcours = clone(parcours);
-                    nouvParcours.add(suiv[0]);
-                    ArrayList<Integer> trouveParcours = calculParcoursLePlusCourt(nouvParcours, dest);
-                    if (trouveParcours != null && trouveParcours.get(trouveParcours.size()-1) == dest) {
-                        if (meilleurParcours == null || meilleurParcours.size() > trouveParcours.size()) {
-                            meilleurParcours = trouveParcours;
-                        }
-                    }
-
-                } else {
-                    if (debug) System.err.println(" > deja passé par le noeud : "+suiv[0]+" avec une distance de "+distances[suiv[0]]);
-                }
-            } else {
-                if (debug) System.err.println(" > noeud "+suiv[0]+" déjà dans le parcours");
-            }
-        }
+        log("chemin:");
+        cheminLePlusCourt.forEach(Player::log);
         
-        return meilleurParcours;
+        to = cheminLePlusCourt.pollLast();
+        from = cheminLePlusCourt.pollLast();
     }
     
-    static ArrayList<int[]> getNoeudsSuivantsAvecLaDistance(int n) {
-        ArrayList<int[]> ret = new ArrayList<>();
-        for (int i=0; i<nbArretes; i++) {
-            if (graphe[i][2] > -1 && graphe[i][0] == n) ret.add(new int[] {graphe[i][1], graphe[i][2]});
-            if (graphe[i][3] > -1 && graphe[i][1] == n) ret.add(new int[] {graphe[i][0], graphe[i][3]});
-        }
-        return ret;
-    }
-    
-    static ArrayList<Integer> clone(ArrayList<Integer> list) {
-        ArrayList<Integer> ret = new ArrayList<>();
-        for (Integer i : list) {
-            ret.add(i);
-        }
-        return ret;
-    }
-    
-    static String toString(ArrayList<int[]> list) {
-        if (list == null) return "null";
-        
-        String ret = "("+list.size()+")";
-        for (int[] o : list) {
-            ret += (ret.length()>0?"; ":"")+Arrays.toString(o);
-        }
-        return ret;
-    }
-    
-    static String toString(List list) {
-        if (list == null) return "null";
-    
-        String ret = "";
-        for (Object i : list) {
-            ret += (ret.length()>0?"; ":"")+i;
-        }
-        return ret;
-    }
-   
     /* Codingame common */
     
     static boolean doLog = true;
@@ -185,4 +106,173 @@ class Player {
         player.joue(System.in);
     }
 
+}
+
+/**
+ * Gestion des graphes avec algo de Dijkstra.
+ *
+ */
+class GrapheResolveur {
+
+    int nbSommets;
+    LinkedList<int[]> arcs = new LinkedList<>();
+    
+    // Données de recherche du chemin le plus court
+    int from;
+    int to;
+    int[] minDistance;
+    int[] predecesseurs;
+
+    public GrapheResolveur(int nbSommets) {
+        super();
+        this.nbSommets = nbSommets;
+    }
+    
+    /**
+     * Ajout arc bidirectionnel de longueur 1.
+     */
+    public void ajoutArc(int from, int to) {
+        int[] arc = new int[4];
+        arc[0] = from;
+        arc[1] = to;
+        arc[2] = 1;
+        arc[3] = 1;
+        arcs.add(arc);
+    }
+
+    /**
+     * Ajout arc bidirectionnel de longueur "length".
+     */
+    public void ajoutArc(int from, int to, int length) {
+        int[] arc = new int[4];
+        arc[0] = from;
+        arc[1] = to;
+        arc[2] = length;
+        arc[3] = length;
+        arcs.add(arc);
+    }
+    
+    /**
+     * Ajout arc bidirectionnel avec un longueur "length" à l'aller et "lengthReturn" au retour.
+     */
+    public void ajoutArc(int from, int to, int length, int lengthReturn) {
+        int[] arc = new int[4];
+        arc[0] = from;
+        arc[1] = to;
+        arc[2] = length;
+        arc[3] = lengthReturn;
+        arcs.add(arc);
+    }
+    
+    /**
+     * Algo de Dijkstra.
+     */
+    public int cheminLePlusCourt(int from, int to) {
+        this.from = from;
+        this.to = to;
+
+        // Initialisation
+        
+        boolean[] dejaVu = new boolean[nbSommets];
+        minDistance = new int[nbSommets];
+        predecesseurs = new int[nbSommets];
+        
+        for (int i = 0; i < nbSommets; i++) {
+            dejaVu[i] = false;
+            minDistance[i] = Integer.MAX_VALUE;
+            predecesseurs[i] = -1;
+        }
+        
+        // Départ du sommet "from"
+        
+        minDistance[from] = 0;
+        int a = -1;
+        
+        // Boucle d'étude du sommet "a"
+        
+        while ((a = choisirSommetPlusPetiteDistancePasDejaVu(dejaVu, minDistance)) != -1) {
+            dejaVu[a] = true;
+            List<int[]> arcsVersS = arcsAPartirDe(a);
+            arcsVersS.forEach(arc -> {
+                int b = arc[1];
+                if (minDistance[b] > minDistance[arc[0]] + arc[2]) {
+                    minDistance[b] = minDistance[arc[0]] + arc[2];
+                    predecesseurs[b] = arc[0];
+                }
+            });
+        }
+
+        return minDistance[to];
+    }
+
+    /**
+     * Récupération de la liste de sommets du plus petit chemin. 
+     */
+    LinkedList<Integer> chemin() {
+    
+        LinkedList<Integer> ret = new LinkedList<>();
+        ret.add(to);
+        int s = to;
+        while (s != -1 && s != from) {
+            s = predecesseurs[s];
+            ret.addFirst(s);
+        }
+        return ret;
+        
+    }
+    
+    /**
+     * Sélectionner le sommet de plus petite distance pas déjà visité.  
+     */
+    int choisirSommetPlusPetiteDistancePasDejaVu(boolean[] dejaVu, int[] minDistance) {
+        int selection = -1;
+        int distance = Integer.MAX_VALUE;
+        
+        for (int i = 0; i < nbSommets; i++) {
+            if (!dejaVu[i] && minDistance[i] < distance) {
+                selection = i;
+                distance = minDistance[i];
+            }
+        }
+        
+        return selection;
+    }
+    
+    /**
+     * Recherche des arcs qui partent d'un sommet.
+     */
+    
+    private List<int[]> arcsAPartirDe(int s) {
+        return arcs.stream()
+            .filter(arc -> (arc[0] == s && arc[2] > 0) || (arc[1] == s && arc[3] > 0))
+            .map(arc -> {
+                if (arc[0] == s) {
+                    return arc;
+                } else {
+                    int[] newArc = new int[3];
+                    newArc[0] = arc[1];
+                    newArc[1] = arc[0];
+                    newArc[2] = arc[3];
+                    return newArc;
+                }
+            })
+            .collect(Collectors.toList());
+    }
+    
+    /**
+     * Suppression d'un arc (dans les 2 sens).
+     */
+    void suppressArc(int from, int to) {
+        
+        int selection = -1;
+        
+        for (int i=0; i<arcs.size(); i++) {
+            int[] arc = arcs.get(i);
+            if ((arc[0] == from && arc[1] == to) || (arc[0] == to && arc[1] == from)) {
+                selection = i;
+            }
+        }
+        arcs.remove(selection); 
+   }
+   
 }

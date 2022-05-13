@@ -11,6 +11,8 @@ public class GrapheResolveurTest {
     @Test
     public void testGrapheResolveur() {
         // voir vidéo : https://www.youtube.com/watch?v=rHylCtXtdNs
+        // et doc graphes.docx.
+        
         GrapheResolveur gr = new GrapheResolveur(7);
         gr.ajoutArc(0, 1, 1); // ab1
         gr.ajoutArc(0, 2, 2); // ac2
@@ -31,9 +33,25 @@ public class GrapheResolveurTest {
         LinkedList<Integer> chemin = gr.chemin();
         chemin.forEach(System.out::println);
         assertEquals(0, chemin.get(0).intValue());
-        assertEquals(2, chemin.get(1).intValue());
+        assertEquals(1, chemin.get(1).intValue());
         assertEquals(3, chemin.get(2).intValue());
         assertEquals(6, chemin.get(3).intValue());
+        
+        // Si on supprime dg :
+        
+        gr.suppressArc(3, 6);
+        
+        lg = gr.cheminLePlusCourt(0, 6);
+        assertEquals(8, lg);
+        
+        System.out.println("chemin:");
+        chemin = gr.chemin();
+        chemin.forEach(System.out::println);
+        assertEquals(0, chemin.get(0).intValue());
+        assertEquals(1, chemin.get(1).intValue());
+        assertEquals(5, chemin.get(2).intValue());
+        assertEquals(6, chemin.get(3).intValue());
+        
     }
 
 }
