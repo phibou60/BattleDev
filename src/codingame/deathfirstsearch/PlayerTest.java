@@ -9,6 +9,7 @@ public class PlayerTest {
             Player player = new Player();
             InputStream inStream = player.getClass().getClassLoader()
                     .getResourceAsStream("codingame/deathfirstsearch/input.txt");
+            player.activateLog();
             player.joue(inStream);
 
         } catch (Exception e) {

@@ -5,22 +5,18 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Auto-generated code below aims at helping you parse
- * the standard input according to the problem statement.
+ * Algorithme Minimax / algorithme Alha/Béta.
  **/
 class Player {
 
+    private static final int MAX_PROF = 2;
     int nbSommets = 0;
     int nbArcs = 0;
-    
     int nbExits = 0;
-    int[] exits = null;
     
-    GrapheResolveur gr;
+    int nbPositionsEtude = 0;
     
-    // Solution
-    int from;
-    int to;
+    EtatReseau etatReseau = new EtatReseau();
     
     void joue(InputStream inStream) {
         Scanner in = new Scanner(inStream);
@@ -31,63 +27,236 @@ class Player {
         nbExits = in.nextInt(); // the number of exit gateways
         System.err.println(""+nbSommets+" "+nbArcs+" "+nbExits);
         
-        gr = new GrapheResolveur(nbSommets);
-        
         for (int i = 0; i < nbArcs; i++) {
             int n1 = in.nextInt(); // N1 and N2 defines a link between these nodes
             int n2 = in.nextInt();
             System.err.println(""+n1+" "+n2);
             
-            gr.ajoutArc(n1, n2);
+            etatReseau.arcs.add(new int[] {n1, n2});
         }
         
-        exits = new int[nbExits];
-        
         for (int i = 0; i < nbExits; i++) {
-            exits[i] = in.nextInt(); // the index of a gateway node
-            System.err.println(""+exits[i]);
+            int exit = in.nextInt(); // the index of a gateway node
+            etatReseau.exits.add(exit);
+            System.err.println(""+exit);
         }
 
         // game loop
         while (true) {
-            int n = in.nextInt(); // The index of the node on which the Skynet agent is positioned this turn
-            System.err.println(""+n);
+            etatReseau.noeudVirus = in.nextInt(); // The index of the node on which the Skynet agent is positioned this turn
+            System.err.println(""+etatReseau.noeudVirus);
             
-            strategie(n);
+            nbPositionsEtude = 0;
+            long ts = System.nanoTime();
+            int[] arc = strategie(etatReseau);
+            System.err.println("nbPositionsEtude:"+nbPositionsEtude+", duree ms:"+((System.nanoTime()- ts) / 1_000_000));
             
-            System.out.println(from+" "+to);
-            gr.suppressArc(from, to);
+            System.out.println(arc[0]+" "+arc[1]);
+            etatReseau.supprimeArc(arc);
         }
         
     }
         
-    private void strategie(int n) {
+    private int[] strategie(EtatReseau etatReseau) {
         
-        // Recherche de la sortie la plus proche pour le virus et blocage du dernier arc
-        // qui permet d'atteindre cette sortie.
+        // Algorithme Min/Max.
+        MeilleurCoupReseau meilleurCoup = rechercheMeilleurCoupReseau(etatReseau, 1, false);
+        return meilleurCoup.coup;
+    }
+    
+    MeilleurCoupReseau rechercheMeilleurCoupReseau(EtatReseau etatReseau, int prof,
+            boolean etudeCoupsForcesUniquement) {
+        String chevrons = getChevrons(prof);
         
-        int lgLePlusCourt = Integer.MAX_VALUE;
-        LinkedList<Integer> cheminLePlusCourt = null;
+        List<int[]> coups = etatReseau.getArcsACouper();
+        nbPositionsEtude += coups.size();
+        log(chevrons, "nb coups Reseau:", coups.size());
         
-        for (int i = 0; i < exits.length; i++) {
-            int lg = gr.cheminLePlusCourt(n, exits[i]);
-            if (lg < lgLePlusCourt) {
-                log("cheminLePlusCourt:", lg);
-                cheminLePlusCourt = gr.chemin();
-                lgLePlusCourt = lg;
+        // 1/ Le réseau a coupé tous les arcs menant aux sorties. Il a gagné. On sort.
+        
+        if (coups.size() == 0) {
+            log(chevrons, "Le reseau a gagné: plus d'arcs menant aux sortie");
+            return new MeilleurCoupReseau(1, etatReseau.arcs.get(0)); // Peu importe
+        }
+        
+        // 2/ Recherche de coups forcés "évidents" et sortie immédiate.
+        List<int[]> coupsForces = coups.stream()
+                    .filter(coup -> coup[0] == etatReseau.noeudVirus || coup[1] == etatReseau.noeudVirus)
+                    .collect(Collectors.toList());
+                    
+        if (coupsForces.size() == 2) {
+            log(chevrons, "2 coup forcés pour le reseau = perte:", Arrays.toString(coupsForces.get(0)));
+            return new MeilleurCoupReseau(-1, coupsForces.get(0));
+        }
+        
+        boolean coupForce = false;
+        if (coupsForces.size() == 1) {
+            log(chevrons, "Coup forcé pour le reseau:", Arrays.toString(coupsForces.get(0)));
+            // On va étudier uniquement les conséquences de ce coup forcé
+            coups = coupsForces;
+            coupForce = true;
+        }
+        
+        if (etudeCoupsForcesUniquement && !coupForce) {
+            return new MeilleurCoupReseau(0, coups.get(0)); // Peu importe 
+        }
+        
+        // 3/ Sinon analyse récursive des coups possibles du réseau 
+        
+        // Etude des coups du réseau
+        
+        int[] coupSelect = null;
+        int meilleurCoup = Integer.MIN_VALUE;
+        
+        for (int[] coup : coups) {
+            log(chevrons, "coup reseau:", Arrays.toString(coup));
+            
+            // On simule un coup du réseau et on obtient un nouvel état a étudier
+            etatReseau.supprimeArc(coup);
+            // On étudie ce coup récursivment
+            int valCoup = rechercheMeilleurCoupBobnet(etatReseau, prof,
+                    etudeCoupsForcesUniquement || (prof >= MAX_PROF && coupForce));
+            // On revient en arrière sur le coup
+            etatReseau.arcs.add(coup);
+            
+            if (valCoup > meilleurCoup) {
+                log(chevrons, " -- select. coup: ", Arrays.toString(coup), ", val:", valCoup);
+                coupSelect = coup;
+                meilleurCoup = valCoup;
+                // Ersatz d'algorithme alpha-beta
+                if (meilleurCoup >= 0) {
+                    log(chevrons, " -- fin. on trouvera pas mieux.");
+                    break;
+                }
             }
         }
         
-        log("chemin:");
-        cheminLePlusCourt.forEach(Player::log);
+        return new MeilleurCoupReseau(meilleurCoup, coupSelect);
+    }
+
+    
+    int rechercheMeilleurCoupBobnet(EtatReseau etatReseau, int prof,
+            boolean etudeCoupsForcesUniquement) {
+        String chevrons = ">" + getChevrons(prof);
         
-        to = cheminLePlusCourt.pollLast();
-        from = cheminLePlusCourt.pollLast();
+        List<Integer> coups = etatReseau.getCoupsVirus();
+        log(chevrons, "nb coups Bobnet:", coups.size(), "=", Arrays.toString(coups.toArray()));
+        nbPositionsEtude += coups.size();
+        
+        // 1/ Recherche de coups forcés "évidents" et sortie immédiate.
+        
+        Optional<Integer> coupGagnant = coups.stream()
+            .filter(coup -> etatReseau.exits.contains(coup))
+            .findAny();
+        if (coupGagnant.isPresent()) {
+            log(chevrons, " > COUP GAGNANT BOBNET:", coupGagnant.get());
+            return -1;
+        }
+        
+        // 2/ Sinon analyse récursive des coups du virus pour rechercher un coup gagnant 
+        
+        if (prof <= MAX_PROF || etudeCoupsForcesUniquement) {
+            
+            int meilleurCoup = Integer.MAX_VALUE;
+            
+            for (int coup : coups) {
+                log(chevrons, "coup Bobnet:", coup);
+                int localisationVirusActuel = etatReseau.noeudVirus;
+                etatReseau.deplaceVirus(coup);
+                MeilleurCoupReseau meilleur = rechercheMeilleurCoupReseau(etatReseau, prof + 1, etudeCoupsForcesUniquement);
+                etatReseau.deplaceVirus(localisationVirusActuel);
+                log(chevrons, "meilleur.val:", meilleur.val);
+                // Ersatz d'algorithme alpha-beta
+                // Si le meilleur coup est val = -1, on peut sortir tout de suite
+                if (meilleur.val == -1) {
+                    log(chevrons, "return: -1");
+                    return -1;
+                }
+                if (meilleur.val < meilleurCoup) {
+                    meilleurCoup = meilleur.val;
+                }
+            }
+            log(chevrons, "return:", meilleurCoup);
+            return meilleurCoup;
+            
+        }
+
+        log(chevrons, " > pas de coup gagnant");
+        return 0;
+    }
+    
+    class MeilleurCoupReseau {
+        int val;
+        int[] coup;
+
+        public MeilleurCoupReseau(int val, int[] coup) {
+            super();
+            this.val = val;
+            this.coup = coup;
+        }
+        
+    }
+    
+    /**
+     * Classe qui symbolise l'état du réseau
+     *
+     */
+    class EtatReseau {
+        int noeudVirus;
+        List<Integer> exits = new ArrayList<>();
+        LinkedList<int[]> arcs = new LinkedList<>();
+        
+        EtatReseau cloneEtat() {
+            EtatReseau newEtat = new EtatReseau();
+            newEtat.noeudVirus = noeudVirus;
+            arcs.forEach(newEtat.arcs::add);
+            newEtat.exits = exits;
+            return newEtat;
+        }
+
+        LinkedList<int[]> getArcsACouper() {
+            LinkedList<int[]> ret = new LinkedList<>();
+            
+            for (int exit : exits) {
+                for (int[] arc : arcs) {
+                    if (arc[0] == exit || arc[1] == exit) {
+                        ret.add(arc);
+                    }
+                }
+            }
+        
+            return ret;
+        }
+        
+        List<Integer> getCoupsVirus() {
+            List<Integer> coups = new LinkedList<>();
+            arcs.stream().filter(arc -> arc[0] == noeudVirus).forEach(arc -> coups.add(arc[1]));
+            arcs.stream().filter(arc -> arc[1] == noeudVirus).forEach(arc -> coups.add(arc[0]));
+            return coups;
+        }
+        
+        EtatReseau supprimeArc(int[] arc) {
+            int iSelect = -1;
+            
+            for (int i = 0; i<arcs.size(); i++) {
+                if (arcs.get(i)[0] == arc[0] && arcs.get(i)[1] == arc[1]) {
+                    iSelect = i;
+                }
+            }
+            if (iSelect > -1) arcs.remove(iSelect);
+            return this;
+        }
+        
+        EtatReseau deplaceVirus(int coup) {
+            noeudVirus = coup;
+            return this;
+        }
+       
     }
     
     /* Codingame common */
     
-    static boolean doLog = true;
+    static boolean doLog = false;
     static void log(Object... objects) {
         if (doLog) {
             for (Object o : objects) {
@@ -97,6 +266,12 @@ class Player {
         }
     }
 
+    static String getChevrons(int nbChevrons) {
+        String ret = "";
+        for (int i = 0; i<nbChevrons; i++) ret += ">";
+        return ret;
+    }
+    
     static void activateLog() {
         doLog = true;
     }
@@ -106,173 +281,4 @@ class Player {
         player.joue(System.in);
     }
 
-}
-
-/**
- * Gestion des graphes avec algo de Dijkstra.
- *
- */
-class GrapheResolveur {
-
-    int nbSommets;
-    LinkedList<int[]> arcs = new LinkedList<>();
-    
-    // Données de recherche du chemin le plus court
-    int from;
-    int to;
-    int[] minDistance;
-    int[] predecesseurs;
-
-    public GrapheResolveur(int nbSommets) {
-        super();
-        this.nbSommets = nbSommets;
-    }
-    
-    /**
-     * Ajout arc bidirectionnel de longueur 1.
-     */
-    public void ajoutArc(int from, int to) {
-        int[] arc = new int[4];
-        arc[0] = from;
-        arc[1] = to;
-        arc[2] = 1;
-        arc[3] = 1;
-        arcs.add(arc);
-    }
-
-    /**
-     * Ajout arc bidirectionnel de longueur "length".
-     */
-    public void ajoutArc(int from, int to, int length) {
-        int[] arc = new int[4];
-        arc[0] = from;
-        arc[1] = to;
-        arc[2] = length;
-        arc[3] = length;
-        arcs.add(arc);
-    }
-    
-    /**
-     * Ajout arc bidirectionnel avec un longueur "length" à l'aller et "lengthReturn" au retour.
-     */
-    public void ajoutArc(int from, int to, int length, int lengthReturn) {
-        int[] arc = new int[4];
-        arc[0] = from;
-        arc[1] = to;
-        arc[2] = length;
-        arc[3] = lengthReturn;
-        arcs.add(arc);
-    }
-    
-    /**
-     * Algo de Dijkstra.
-     */
-    public int cheminLePlusCourt(int from, int to) {
-        this.from = from;
-        this.to = to;
-
-        // Initialisation
-        
-        boolean[] dejaVu = new boolean[nbSommets];
-        minDistance = new int[nbSommets];
-        predecesseurs = new int[nbSommets];
-        
-        for (int i = 0; i < nbSommets; i++) {
-            dejaVu[i] = false;
-            minDistance[i] = Integer.MAX_VALUE;
-            predecesseurs[i] = -1;
-        }
-        
-        // Départ du sommet "from"
-        
-        minDistance[from] = 0;
-        int a = -1;
-        
-        // Boucle d'étude du sommet "a"
-        
-        while ((a = choisirSommetPlusPetiteDistancePasDejaVu(dejaVu, minDistance)) != -1) {
-            dejaVu[a] = true;
-            List<int[]> arcsVersS = arcsAPartirDe(a);
-            arcsVersS.forEach(arc -> {
-                int b = arc[1];
-                if (minDistance[b] > minDistance[arc[0]] + arc[2]) {
-                    minDistance[b] = minDistance[arc[0]] + arc[2];
-                    predecesseurs[b] = arc[0];
-                }
-            });
-        }
-
-        return minDistance[to];
-    }
-
-    /**
-     * Récupération de la liste de sommets du plus petit chemin. 
-     */
-    LinkedList<Integer> chemin() {
-    
-        LinkedList<Integer> ret = new LinkedList<>();
-        ret.add(to);
-        int s = to;
-        while (s != -1 && s != from) {
-            s = predecesseurs[s];
-            ret.addFirst(s);
-        }
-        return ret;
-        
-    }
-    
-    /**
-     * Sélectionner le sommet de plus petite distance pas déjà visité.  
-     */
-    int choisirSommetPlusPetiteDistancePasDejaVu(boolean[] dejaVu, int[] minDistance) {
-        int selection = -1;
-        int distance = Integer.MAX_VALUE;
-        
-        for (int i = 0; i < nbSommets; i++) {
-            if (!dejaVu[i] && minDistance[i] < distance) {
-                selection = i;
-                distance = minDistance[i];
-            }
-        }
-        
-        return selection;
-    }
-    
-    /**
-     * Recherche des arcs qui partent d'un sommet.
-     */
-    
-    private List<int[]> arcsAPartirDe(int s) {
-        return arcs.stream()
-            .filter(arc -> (arc[0] == s && arc[2] > 0) || (arc[1] == s && arc[3] > 0))
-            .map(arc -> {
-                if (arc[0] == s) {
-                    return arc;
-                } else {
-                    int[] newArc = new int[3];
-                    newArc[0] = arc[1];
-                    newArc[1] = arc[0];
-                    newArc[2] = arc[3];
-                    return newArc;
-                }
-            })
-            .collect(Collectors.toList());
-    }
-    
-    /**
-     * Suppression d'un arc (dans les 2 sens).
-     */
-    void suppressArc(int from, int to) {
-        
-        int selection = -1;
-        
-        for (int i=0; i<arcs.size(); i++) {
-            int[] arc = arcs.get(i);
-            if ((arc[0] == from && arc[1] == to) || (arc[0] == to && arc[1] == from)) {
-                selection = i;
-            }
-        }
-        arcs.remove(selection); 
-   }
-   
 }
