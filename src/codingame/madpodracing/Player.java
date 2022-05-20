@@ -1,6 +1,6 @@
 package codingame.madpodracing;
-import java.util.*;
 
+import java.util.*;
 import java.io.*;
 
 /**
@@ -17,6 +17,8 @@ class Player {
     
     private static final int VITESSE_MAX = 500;
 
+    boolean boostFait = false;
+    
     Etat etat;
     Etat etatPrec = null;
     
@@ -47,27 +49,23 @@ class Player {
     
     private void strategie() {
         
-        strategieBoost();
+        // Neurones couche 1 = Enrichissement
         enrichissement();
-        strategieThrustLimitte();
-        strategieCoupureThrust();
-        strategieCorrectionDerive();
         
+        // Neurones couche 2 = Stratégie élaborée    
+        strategieBoostEnLigneDroite();
+        strategieCoupureThrustSurCheckpoint();
+        strategieCorrectionDerive();
         // TODO : strategieDemiTour();
+        // TODO : strategieBumperPostCheckpoint
+        
+        // Neurones couche 3 = Stratégies minimalistes (par défaut)
         strategieCibleParDefaut();
+        defautThrust();
+        
+        // Neurone de sortie
         ordreThrust();
         
-    }
-
-    private void strategieBoost() {
-        // Validation des conditions d'activation du neurone
-        if (etatPrec == null) /* continue */;
-        else return;
-        
-        // Calculs
-        
-        // Données en sortie
-        etat.ordre.boost = true;
     }
 
     private void enrichissement() {
@@ -82,40 +80,57 @@ class Player {
         double distCheckPoint = etat.pod.distance(etat.nextCheckpoint);
         double distCheckPointPrec = etatPrec.pod.distance(etat.nextCheckpoint);
         
-        log("distCheckPoint:", distCheckPoint, "distCheckPointPrec:", distCheckPointPrec);
+        logDebug("distCheckPoint:", distCheckPoint, "distCheckPointPrec:", distCheckPointPrec);
         
         etat.vitesseRelative = distCheckPointPrec - distCheckPoint;
         log("vitesse:", etat.vitesse, "vitesseRelative:", etat.vitesseRelative);
     }
 
-    private void strategieThrustLimitte() {
+    private void strategieBoostEnLigneDroite() {
         // Validation des conditions d'activation du neurone
-        if ((!etat.ordre.boost) && Double.isNaN(etat.newThrust)) /* continue */;
+        if (boostFait) return;
+        
+        double distPodToOponent = etat.pod.distance(etat.opponent);
+        double distPodToCheckpoint = etat.pod.distance(etat.nextCheckpoint);
+        log("distPodToOponent:", distPodToOponent, "distPodToCheckpoint:", distPodToCheckpoint);
+        
+        if (distPodToOponent > 2_000
+            && distPodToCheckpoint > 5_000
+            && Math.abs(etat.nextCheckpointAngle) < 3) /* continue */;
         else return;
         
-        etat.newThrust = VITESSE_MAX - etat.vitesse * FROTTEMENT;
-        log("strategieThrustLimitté:", etat.newThrust);
+        log("---- Strategie Boost En Ligne Droite ----");
+        
+        // Calculs
+        
+        // Données en sortie
+        etat.ordre.boost = true;
     }
 
-
-    private void strategieCoupureThrust() {
+    private void strategieCoupureThrustSurCheckpoint() {
         // Validation des conditions d'activation du neurone
         if (etatPrec != null) /* continue */;
         else return;
-
+        
         int t100 = tempsArriveeCheckpoint(etat.pod, etat.vitesse, etat.nextCheckpoint, 100);
         int t0 = tempsArriveeCheckpoint(etat.pod, etat.vitesse, etat.nextCheckpoint, 0);
 
         log("Temps d'arrivee pour thrust = 100 :", t100);
         log("Temps d'arrivee pour thrust = 0 :", t0);
         
-        if (t100 == t0) etat.newThrust = 0; else etat.newThrust = 100;
+        if (t100 == t0 || t0 < 3) {
+            log("---- Strategie Coupure Thrust ----");
+            etat.newThrust = 0;
+            log("Arret des thrusts", (t100 >= t0), (t0 < 3));
+        }
     }
         
     private void strategieCorrectionDerive() {
         // Validation des conditions d'activation du neurone
         if (etatPrec != null) /* continue */;
         else return;
+        
+        log("---- Strategie Correction Derive ----");
         
         Coords vecteurDirection = etat.pod.createVecteurTo(etat.nextCheckpoint);
         log("vecteurDirection", vecteurDirection.showVector());
@@ -125,7 +140,7 @@ class Player {
         Coords vecteurDeCorrection = new Coords(-vecteurVitesse.x, -vecteurVitesse.y);
         Coords cible = etat.nextCheckpoint.doVtranslation(vecteurDeCorrection);
         
-        Coords vecteurOptimal = etat.pod.getVecteurVers(cible, VITESSE_MAX);
+        Coords vecteurOptimal = etat.pod.getVecteurVers(cible, etat.nextCheckpointDist);
         etat.ordre.cible = etat.pod.doVtranslation(vecteurOptimal);
 
         logDebug("vecteurVitesse", vecteurVitesse.showVector());
@@ -140,6 +155,8 @@ class Player {
         if (etat.ordre.cible == null) /* continue */;
         else return;
 
+        log("---- Strategie Cible Par Defaut ----");
+        
         // Calculs
         
         // Données en sortie
@@ -147,11 +164,26 @@ class Player {
         etat.ordre.cible = etat.nextCheckpoint;
     }
 
+    private void defautThrust() {
+        // Validation des conditions d'activation du neurone
+        if (etat.ordre.boost) {
+            return;
+        }
+        
+        if (Double.isNaN(etat.newThrust)) {
+            log("---- Strategie Defaut Thrust ----");
+            etat.newThrust = 100;
+        }
+        
+    }
+
     private void ordreThrust() {
         // Validation des conditions d'activation du neurone
-        if (!etat.ordre.boost) /* continue */;
-        else return;
-       
+        if (etat.ordre.boost) {
+            boostFait = true;
+            return;
+        }
+          
         etat.ordre.thrust = Math.max(Math.min((int)etat.newThrust, 100), 0);
         if (Math.abs(etat.nextCheckpointAngle) > MAX_ANGLE) etat.ordre.thrust = 0;
         log("thrust brut:", etat.newThrust, " > ", etat.ordre.thrust);
