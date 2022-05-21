@@ -19,7 +19,7 @@ public class AngleEnDegres {
     }
 
     /* Constructeur a partir de radian */
-    public AngleEnDegres ofRadian(double radian) {
+    /* static */ public AngleEnDegres ofRadian(double radian) {
         double temp = (radian / (2 * Math.PI)) * 360; 
         return new AngleEnDegres(temp);
     }
