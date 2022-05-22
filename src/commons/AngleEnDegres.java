@@ -49,10 +49,18 @@ public class AngleEnDegres {
         return this;
     }
 
+    public AngleEnDegres ajoute(AngleEnDegres angle2) {
+        return ajoute(angle2.angle);
+    }
+
     public AngleEnDegres retire(double angle2) {
         angle -= angle2;
         normalize();
         return this;
+    }
+
+    public AngleEnDegres retire(AngleEnDegres angle2) {
+        return retire(angle2.angle);
     }
 
     public boolean estProcheDe(double angle2, double delta) {
