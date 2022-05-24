@@ -1,12 +1,16 @@
 package codingame.madpodracing;
 
 import java.io.InputStream;
+import java.util.Arrays;
 
 public class PlayerTest {
 
     public static void main(String args[]) {
         try {
             Player player = new Player();
+            test(player);
+            System.exit(0);
+            
             InputStream inStream = player.getClass().getClassLoader()
                     .getResourceAsStream("codingame/madpodracing/input.txt");
             player.activateLog();
@@ -17,7 +21,61 @@ public class PlayerTest {
         }
     }
 
-    private static void test(Player player) throws Exception {
+    private static void testVirage(Player player) throws Exception {
+         int t = Player.tempsArriveeCheckpoint(
+                new Coords(6988, 7044) /* position */,
+                new Coords(-432,  182) /* vecteur vitesse */, 
+                195 /* anglePod */,
+                new Coords(6026, 5359) /* checkpoint */,
+                new Coords(6026, 5359) /* cible */,
+                0 /* noThrust */,
+                30 /* profMax */);
+         System.out.println("ret:"+Arrays.toString(temps));
+    }
+
+    private static void testCoupureThrust(Player player) throws Exception {
+        
+        int[] temps = new int[10];
+        
+        for (int noThrust = 0; noThrust<temps.length; noThrust++) {
+            int t = Player.tempsArriveeCheckpoint(
+                    new Coords(6988, 7044) /* position */,
+                    new Coords(-432,  182) /* vecteur vitesse */, 
+                    195 /* anglePod */,
+                    new Coords(6026, 5359) /* checkpoint */,
+                    new Coords(6026, 5359) /* cible */,
+                    noThrust /* noThrust */,
+                    30 /* profMax */);
+            temps[noThrust] = t;
+        }
+
+        
+        int tempsAvecFullThrust = 999;
+        
+        int noThrust = 0;
+        boolean continuer = true;
+        
+        while (noThrust < 10 && continuer) {
+            int t = Player.tempsArriveeCheckpoint(
+                    new Coords(6988, 7044) /* position */,
+                    new Coords(-432,  182) /* vecteur vitesse */, 
+                    195 /* anglePod */,
+                    new Coords(6026, 5359) /* checkpoint */,
+                    new Coords(6026, 5359) /* cible */,
+                    noThrust /* noThrust */,
+                    30 /* profMax */);
+            if (noThrust == 0) {
+                tempsAvecFullThrust = t;
+            } else {
+                if (t < tempsAvecFullThrust) {
+                    System.out.println("Meilleur de couper le thrust");
+                    continuer = false;
+                }
+            }
+            noThrust++;
+        }
+        
+        System.out.println("ret:"+Arrays.toString(temps));
     }
 
     private static void assertEquals(int v1, int v2) throws Exception {

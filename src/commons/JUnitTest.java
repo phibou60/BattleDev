@@ -28,7 +28,7 @@ public class JUnitTest {
         
         assertEquals(999, from.distance(to));
         
-        Coords vector1 = from.createVecteurTo(to);
+        Coords vector1 = from.createVecteurVers(to);
         assertEquals(866, vector1.x);
         assertEquals(500, vector1.y);
         assertEquals(999, vector1.getVNorme());

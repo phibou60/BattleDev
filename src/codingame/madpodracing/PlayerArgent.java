@@ -5,10 +5,9 @@ import java.util.*;
 import java.io.*;
 
 /**
- * Auto-generated code below aims at helping you parse
- * the standard input according to the problem statement.
+ * Player de la ligue argent qui est passé en ligue d'or.
  **/
-class Player {
+class PlayerArgent {
     static boolean doLog = true;
     static boolean doLogDebug = false;
     private static final int MAX_X = 16_000;
@@ -607,7 +606,7 @@ class Player {
     }
     
     public static void main(String args[]) {
-        Player player = new Player();
+        PlayerArgent player = new PlayerArgent();
         player.joue(System.in);
     }
     

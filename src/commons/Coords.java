@@ -10,7 +10,7 @@ import java.util.Comparator;
 
 /* Coords staticCoords = new Coords(); */
 
-public class Coords {
+class Coords {
     /* static */ int MAX_X = 17_630;
     /* static */ int MAX_Y = 9_000;
 
@@ -39,11 +39,11 @@ public class Coords {
         boolean ret = x >= 0 && x <= MAX_X && y >= 0 && y <= MAX_Y;
         return ret;
     }
-/*    
+    
     Interception getInterception(Pion m) {
         return new Interception(this, m);
     }
-*/    
+    
     /**
      * Retourne un point au dela du point2.
      * TODO : ajout d'un controle si on sort de la carte ou pas
