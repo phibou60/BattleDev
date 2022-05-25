@@ -8,8 +8,7 @@ public class PlayerTest {
     public static void main(String args[]) {
         try {
             Player player = new Player();
-            test(player);
-            System.exit(0);
+            //test(player); System.exit(0);
             
             InputStream inStream = player.getClass().getClassLoader()
                     .getResourceAsStream("codingame/madpodracing/input.txt");
@@ -19,18 +18,6 @@ public class PlayerTest {
         } catch (Exception e) {
             e.printStackTrace();
         }
-    }
-
-    private static void testVirage(Player player) throws Exception {
-         int t = Player.tempsArriveeCheckpoint(
-                new Coords(6988, 7044) /* position */,
-                new Coords(-432,  182) /* vecteur vitesse */, 
-                195 /* anglePod */,
-                new Coords(6026, 5359) /* checkpoint */,
-                new Coords(6026, 5359) /* cible */,
-                0 /* noThrust */,
-                30 /* profMax */);
-         System.out.println("ret:"+Arrays.toString(temps));
     }
 
     private static void testCoupureThrust(Player player) throws Exception {
