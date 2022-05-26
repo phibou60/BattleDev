@@ -312,7 +312,7 @@ class Player {
                     pod.futureCheckpoint, noThrust, SECONDES_MAX, 500);
             
             int t = simul.tempsCheckpoint;
-            logDebug("Temps virage parfait:", t, "pour thrust:", noThrust, "simul", simul);
+            log("Temps virage parfait:", t, "pour thrust:", noThrust, "simul", simul);
             
             if (t <= SECONDES_MAX) {
                 if (noThrust == 0) {
@@ -443,7 +443,7 @@ class Player {
                     noThrust /* noThrust */,
                     30 /* profMax */, 500 /* distance */);
             int t = simul.tempsCheckpoint;
-            logDebug("Temps:", t, "pour thrust:", noThrust, "simul", simul);
+            log("Temps:", t, "pour thrust:", noThrust, "simul", simul);
             
             if (noThrust == 0) {
                 tempsAvecFullThrust = t;
@@ -523,7 +523,8 @@ class Player {
 
         // Simulation des prochaines coords de l'adversaire
         Coords cibleOpponent = checkpoints.get(opponents.get(idOpponent).nextCheckPointId);
-        
+        log("cibleOpponent:", cibleOpponent);
+
         Simulation simul = simulationCheckpointEtNext(opponents.get(idOpponent),
                 cibleOpponent, cibleOpponent,
                 0 /* noThrust */, 20 /* profMax */, 500 /* distance */);
@@ -533,7 +534,7 @@ class Player {
         
         // Recherche d'une interception sur ces prochaines Coords
         
-        for (int i=0; i<6; i++) {
+        for (int i=0; i<simul.ptPassage.size(); i++) {
             Coords p = simul.ptPassage.get(i);
 
             int thrust = thrustPourAtteindreCibleEnUnTemps(pod, p, i, 700);
