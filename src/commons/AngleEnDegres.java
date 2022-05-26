@@ -5,7 +5,7 @@ package commons;
  * @author philippe b
  *
  */
-public class AngleEnDegres {
+class AngleEnDegres {
 
     public double angle;
 
@@ -19,7 +19,7 @@ public class AngleEnDegres {
     }
 
     /* Constructeur a partir de radian */
-    /* static */ public AngleEnDegres ofRadian(double radian) {
+    public static AngleEnDegres ofRadian(double radian) {
         double temp = (radian / (2 * Math.PI)) * 360; 
         return new AngleEnDegres(temp);
     }
@@ -31,7 +31,6 @@ public class AngleEnDegres {
     int getIntAngle() {
         return new Double(angle).intValue();
     }
-    
     
     @Override
     public AngleEnDegres clone() {
@@ -62,10 +61,22 @@ public class AngleEnDegres {
     public AngleEnDegres retire(AngleEnDegres angle2) {
         return retire(angle2.angle);
     }
+    
+    /**
+     * Ecart en degré entre 2 angles.
+     */
+    public AngleEnDegres ecart(AngleEnDegres cible) {
+        AngleEnDegres ret = new AngleEnDegres(angle - cible.angle);
+        ret.normalize();
+        return ret;
+    }
 
-    public boolean estProcheDe(double angle2, double delta) {
+    /**
+     * Vérifie si un angle est proche d'un autre (avec une marge d'erreur)
+     */
+    public boolean estProcheDe(double angle2, double margeErreur) {
         AngleEnDegres temp = new AngleEnDegres(angle - angle2);
-        return delta > temp.angle && temp.angle > -delta;
+        return margeErreur > temp.angle && temp.angle > -margeErreur;
     }
 
     @Override

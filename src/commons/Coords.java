@@ -8,11 +8,9 @@ import java.util.Comparator;
  *
  */
 
-/* Coords staticCoords = new Coords(); */
-
 class Coords {
-    /* static */ int MAX_X = 17_630;
-    /* static */ int MAX_Y = 9_000;
+    static final int MAX_X = 17_630;
+    static final int MAX_Y = 9_000;
 
     double x;
     double y;
@@ -20,19 +18,46 @@ class Coords {
     public Coords() {}
 
     public Coords(double x, double y) {
-        super();
         this.x = x;
         this.y = y;
     }
 
     double distance(Coords c2) {
         double dist = Math.hypot(x - c2.x, y - c2.y);
-/*
-        if (this instanceof Pion) {
-            ((Pion) this).distanceToTarget = dist;
-        }
-*/
         return dist;
+    }
+
+    /**
+     * Distance au carré (permet d'économiser la racine carrée)
+     */
+    double distance2(Coords c2) {
+        double distX = x - c2.x;
+        double distY = y - c2.y;
+        return distX * distX + distY * distY;
+    }
+
+    /**
+     * Compare si la distance à la cible est inférieur (<0) ou supérieure (>0) à une valeur.<br>
+     * N'utilise pas la racine carrée.
+     */
+    public int compareDistance(Coords cible, double val) {
+        double dist2 = distance2(cible);
+        double val2 = val * val;
+        if (dist2 == val2) return 0;
+        return dist2 < val2 ? -1 : 1;
+    }
+
+    /**
+     * Compare si la distance à C1 est plus proche que C2<br>
+     * Si négatif, elle est plus proche.<br>
+     * N'utilise pas la racine carrée.
+     */
+
+    public int compareDistance(Coords c1, Coords c2) {
+        double dist1 = distance2(c1);
+        double dist2 = distance2(c2);
+        if (dist1 == dist2) return 0;
+        return dist1 < dist2 ? -1 : 1;
     }
 
     boolean dansLaCarte() {
@@ -40,13 +65,10 @@ class Coords {
         return ret;
     }
     
-    Interception getInterception(Pion m) {
-        return new Interception(this, m);
-    }
-    
     /**
      * Retourne un point au dela du point2.
-     * TODO : ajout d'un controle si on sort de la carte ou pas
+     * Attention, on peut sortir de la carte.<br>
+     * TODO : Faire une fonction sans distance qui n'aurait pas de cacluls complexes.
      */
 
     Coords getAuDelaDe(Coords point2, double distance) {
@@ -74,9 +96,9 @@ class Coords {
      * Calcul un point entre 2 points ou en dehors dans une direction ou une autre.
      * 
      * @param 2ème point du segment
-     * @param p Si entre 0 et le point est entre les bornes du segment.
+     * @param p Si entre 0 et 1, le point est entre les bornes du segment.
      *          si 0.5, alors le point est au millieu.
-     *          si 2 alors le point est à une fois la longueur du segment dans la direction de c2 opposé à this..
+     *          si 2 alors le point est à une fois la longueur du segment dans la direction de c2 opposé à this.
      *          si -2 alors le point est à une fois la longueur du segment dans la direction de this opposé à c2.
      * @return
      */
@@ -84,6 +106,9 @@ class Coords {
         return new Coords (this.x + (c2.x - this.x) * p, this.y + (c2.y - this.y) * p);
     }
      
+    /**
+     * TODO : permettre une marge d'erreur de 1. 
+     */
     boolean equals(Coords c2) {
         return x == c2.x && y == c2.y; 
     }
@@ -103,12 +128,12 @@ class Coords {
     
     // ---- Fonctions vectorielles (on considère ici que l'objet Coords est un vecteur)
 
-    /* static */ Coords createVFromFormeTrigono(double angle, double norme) {
+    static Coords createVFromFormeTrigono(double angle, double norme) {
         return new Coords((int) Math.floor(Math.cos(angle) * norme), (int) Math.floor(Math.sin(angle) * norme));
     }
     
     /**
-     * Retourne le vecteur qui fait la translation vers le point2.
+     * Retourne le vecteur qui fait la translation vers le point "to".
      */
             
     Coords createVecteurVers(Coords to) {
@@ -123,6 +148,10 @@ class Coords {
         Coords vectorVersPoint2 = createVecteurVers(point2);
         return new Coords().createVFromFormeTrigono(vectorVersPoint2.getVAngle(), distance);
     }
+
+    /**
+     * Retourne le vecteur qui fait la translation à partir du point "from".
+     */
     
     Coords createVecteurAPartirDe(Coords from) {
         return new Coords(x - from.x, y - from.y);
@@ -170,6 +199,10 @@ class Coords {
         return new AngleEnDegres().ofRadian(vB.getVAngle()-vA.getVAngle()); 
     }
     
+    /**
+     * TODO faire des rotations triviales sans calculs tigonométriques<br>
+     * Exemple : inversion, quart de tour horaire/anti-horaire.
+     */
     Coords rotation(double angleAjout) {
         return new Coords().createVFromFormeTrigono(getVAngle()+angleAjout, getVNorme());
     }
@@ -178,11 +211,11 @@ class Coords {
         return String.format("Coords [x=%.2f, y=%.2f, angle=%.2f(%s°), norme=%.2f]", x, y, getVAngle(), getVAngleDegres(), getVNorme());
     }
     
-    /* static */ Comparator<Coords> duPlusProcheAuPlusLoin(Coords base) {
+    static Comparator<Coords> duPlusProcheAuPlusLoin(Coords base) {
         return new DistanceToBaseComparator(base, 1);
     }
 
-    /* static */ Comparator<Coords> duPlusLoinAuPlusProche(Coords base) {
+    static Comparator<Coords> duPlusLoinAuPlusProche(Coords base) {
         return new DistanceToBaseComparator(base, -1);
     }
 

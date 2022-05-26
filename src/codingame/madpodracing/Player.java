@@ -4,34 +4,38 @@ import java.io.InputStream;
 import java.util.*;
 
 /**
- * Auto-generated code below aims at helping you parse
- * the standard input according to the problem statement.
+ * Idées pour le futur :
+ * - Utiliser le thrust jusqu'à 200
+ * - scinder la méthode attaque en 3 parties : 2 stratégies et un enrichissement préalable
  **/
 class Player {
     enum Mode {COURSE, ATTAQUE};
-    
     static boolean doLog = true;
     static boolean doLogDebug = false;
     protected static final int PAS_ATTEINT = 999;
-    private static final double FROTTEMENT = 0.85D;
-    private static final int MAX_ANGLE = 80;
 
     int laps;
-    int round = 1;
     int checkpointCount;
+    
+    int round = 1;
     List<Coords> checkpoints = new ArrayList<>();
     List<Unit> opponents;
     List<Pod> pods;
+    
+    // Ne sert plus mais servait dans les ligues précédentes à calculer le vecteur vitesse
+    // Maintenant, il est donnée.
     List<Pod> podsPrec = null;
     
+    // Liste des check-points passé par pods (permet de claculer le classement)
     LinkedList<Integer>[] checkpointsDone = new LinkedList[4];
     
+    // Permet de savoir si un boost a été fait.
     boolean[] boostFait = new boolean[2];
     
     Player() {
 
         for (int i = 0; i < checkpointsDone.length; i++) {
-            checkpointsDone[i] = new LinkedList<Integer>();
+            checkpointsDone[i] = new LinkedList<>();
             checkpointsDone[i].add(0); 
         }
         
@@ -67,10 +71,11 @@ class Player {
                 pod.v.x = in.nextInt(); // x speed of your pod
                 pod.v.y = in.nextInt(); // y speed of your pod
                 pod.angle = in.nextInt(); // angle of your pod
-                pod.nextCheckPointId = in.nextInt(); // next check point id of your pod
+                pod.nextCheckpointId = in.nextInt(); // next check point id of your pod
+                pod.nextCheckpoint = checkpoints.get(pod.nextCheckpointId);
                 
                 System.err.println((int) pod.x + " " + (int) pod.y + " " + pod.v.x
-                        + " " + pod.v.y + " " + pod.angle + " " + pod.nextCheckPointId);
+                        + " " + pod.v.y + " " + pod.angle + " " + pod.nextCheckpointId);
 
                 pods.add(pod);
             }
@@ -84,10 +89,11 @@ class Player {
                 opponent.v.x = in.nextInt(); // x speed of the opponent's pod
                 opponent.v.y = in.nextInt(); // y speed of the opponent's pod
                 opponent.angle = in.nextInt(); // angle of the opponent's pod
-                opponent.nextCheckPointId = in.nextInt(); // next check point id of the opponent's pod
+                opponent.nextCheckpointId = in.nextInt(); // next check point id of the opponent's pod
+                opponent.nextCheckpoint = checkpoints.get(opponent.nextCheckpointId);
                 
                 System.err.println((int) opponent.x + " " + (int) opponent.y + " " + opponent.v.x
-                        + " " + opponent.v.y + " " + opponent.angle + " " + opponent.nextCheckPointId);
+                        + " " + opponent.v.y + " " + opponent.angle + " " + opponent.nextCheckpointId);
                 
                 opponents.add(opponent);
             }
@@ -121,45 +127,33 @@ class Player {
         
         // Neurones couche 3 = Stratégies minimalistes (par défaut)
         strategieCibleParDefaut(pod, podPrec);
-        defautThrust(pod, podPrec);
+        thrustIntelligent(pod, podPrec);
         
         // Neurones du mode attaque
         shield(pod, podPrec);
         modeAttaqueInterception(pod, podPrec);
         
-        // Neurone de sortie
-        ordreThrust(pod, podPrec);
+        // Neurone de mise à jour en sortie
+        ordreBoost(pod, podPrec);
         
     }
     
     private void recupInfosCircuit(Pod pod, Pod podPrec) {
-
-        // Récup coords du prochaine checkpoint
-        pod.nextCheckpoint = checkpoints.get(pod.nextCheckPointId);
         
         Coords vecteurVersCheckpoint = pod.createVecteurVers(pod.nextCheckpoint);
         
         pod.nextCheckpointDist = vecteurVersCheckpoint.getVNorme();
         
+        // Recalcul de l'angle vs le checkpoint
         AngleEnDegres angleCheckpoint = vecteurVersCheckpoint.getVAngleDegres();
         AngleEnDegres angleRelatifCheckpoint = angleCheckpoint.retire(pod.angle);
         
-        // angle between your pod orientation and the direction of the next checkpoint
         pod.nextCheckpointAngle = Math.abs((int) angleRelatifCheckpoint.angle);
         
         logDebug("angCP:", angleCheckpoint, "angRelCP:", angleRelatifCheckpoint, "nextCPAng:", pod.nextCheckpointAngle);
         
         // Récup coords du checkpoint futur
-        for (int i=0; i<checkpoints.size(); i++) {
-            if (checkpoints.get(i).equals(pod.nextCheckpoint)) {
-                if (i < checkpoints.size()-1) {
-                    pod.futureCheckpoint = checkpoints.get(i+1);
-                } else {
-                    pod.futureCheckpoint = checkpoints.get(0);
-                }
-                break;
-            }
-        }
+        pod.futureCheckpoint = getCheckpointFuture(pod.nextCheckpointId);
         
         pod.angleFutureCheckpoint = pod.nextCheckpoint.angleVecteurs(pod, pod.futureCheckpoint);
         logDebug(">> future checkpoint:", pod.futureCheckpoint, "angleFutureCheckpoint:", pod.angleFutureCheckpoint);
@@ -167,22 +161,25 @@ class Player {
 
     private void classementPods(Pod pod, Pod podPrec) {
         
+        /// Mise à jour de la liste des checkpoints passés pour chaque pod
         for (int i=0; i<2; i++) {
             int lastCheckpointId = checkpointsDone[i].getFirst();
-            if (pods.get(i).nextCheckPointId != lastCheckpointId) {
-                checkpointsDone[i].addFirst(pods.get(i).nextCheckPointId);               
+            if (pods.get(i).nextCheckpointId != lastCheckpointId) {
+                checkpointsDone[i].addFirst(pods.get(i).nextCheckpointId);               
             }
             logDebug("checkpointsDone", i, "size", checkpointsDone[i].size());
             
             lastCheckpointId = checkpointsDone[i+2].getFirst();
-            if (opponents.get(i).nextCheckPointId != lastCheckpointId) {
-                checkpointsDone[i+2].addFirst(opponents.get(i).nextCheckPointId);               
+            if (opponents.get(i).nextCheckpointId != lastCheckpointId) {
+                checkpointsDone[i+2].addFirst(opponents.get(i).nextCheckpointId);               
             }
             logDebug("checkpointsDone", i+2, "size", checkpointsDone[i+2].size());
         }
         
         logDebug("pods.get(0)", pods.get(0), "pods.get(0).nextCheckpoint", pods.get(0).nextCheckpoint);
         logDebug("pods.get(1)", pods.get(1));
+        
+        // Détermination des classements à l'intérieur des équipes
         
         if (checkpointsDone[0].size() > checkpointsDone[1].size()
          || (checkpointsDone[0].size() == checkpointsDone[1].size()
@@ -196,7 +193,7 @@ class Player {
         
         if (checkpointsDone[2].size() > checkpointsDone[3].size()
          || (checkpointsDone[2].size() == checkpointsDone[3].size()
-                && checkpoints.get(opponents.get(0).nextCheckPointId).compareDistance(opponents.get(0), opponents.get(1)) < 0 )) {
+                && checkpoints.get(opponents.get(0).nextCheckpointId).compareDistance(opponents.get(0), opponents.get(1)) < 0 )) {
             opponents.get(0).rang = 1;
             opponents.get(1).rang = 2;
         } else {             
@@ -216,17 +213,20 @@ class Player {
         log("mode:", pod.mode);
     }
 
+    /**
+     * Ajoute l'opposant direct du pod
+     */
     private void AjoutOpponent(Pod pod, Pod podPrec) {
         Unit o1 = opponents.get(0);
         Unit o2 = opponents.get(1);
         
         double w1 = 0;
-        if (checkpoints.get(o1.nextCheckPointId).equals(pod.nextCheckpoint) 
-            && checkpoints.get(o1.nextCheckPointId).equals(pod.nextCheckpoint)) {
+        if (checkpoints.get(o1.nextCheckpointId).equals(pod.nextCheckpoint) 
+            && checkpoints.get(o1.nextCheckpointId).equals(pod.nextCheckpoint)) {
             pod.opponent = pod.compareDistance(o1, o2) < 0 ? o1 : o2;
-        } else if (checkpoints.get(o1.nextCheckPointId).equals(pod.nextCheckpoint)) {
+        } else if (checkpoints.get(o1.nextCheckpointId).equals(pod.nextCheckpoint)) {
             pod.opponent = o1;
-        } else if (checkpoints.get(o2.nextCheckPointId).equals(pod.nextCheckpoint)) {
+        } else if (checkpoints.get(o2.nextCheckpointId).equals(pod.nextCheckpoint)) {
             pod.opponent = o2;
         } else {
             return;
@@ -236,7 +236,10 @@ class Player {
         pod.distOpponentAuCheckpoint = pod.opponent.distance(pod.nextCheckpoint); 
         pod.distOpponentAuPod = pod.opponent.distance(pod); 
     }
-
+    
+    /**
+     * Enrichissement certainement plus nécessaire dans la mesure ou on fait des simulations.
+     */
     private void enrichissement(Pod pod, Pod podPrec) {
         
         pod.distOpponentAuCheckpoint = pod.opponent.distance(pod.nextCheckpoint);
@@ -259,6 +262,9 @@ class Player {
         logDebug("vitesse:", pod.vitesse, "vitesseRelative:", pod.vitesseRelative);
     }
 
+    /**
+     * Statégie de boost d'un pod au démarrage
+     */
     private void strategieBoostUnPod(Pod pod, Pod podPrec) {
         // Validation des conditions d'activation du neurone
         if (pod.id == 0 && round == 1) /* continue */;
@@ -268,6 +274,9 @@ class Player {
         pod.ordre.boost = true;
     }
 
+    /**
+     * Stratégie d'utilisation du boost en ligne droite si l'espace est dégagé.
+     */
     private void strategieBoostEnLigneDroite(Pod pod, Pod podPrec) {
         // Validation des conditions d'activation du neurone
         if (boostFait[pod.id]) return;
@@ -283,12 +292,13 @@ class Player {
         
         log("---- Strategie Boost En Ligne Droite ----");
         
-        // Calculs
-        
         // Données en sortie
         pod.ordre.boost = true;
     }
 
+    /**
+     * Décision pour faire un virage parfait en anticipant le virage.
+     */
     private void strategieVirageParfait(Pod pod, Pod podPrec) {
         if (pod.mode == Mode.ATTAQUE) return;
         
@@ -312,7 +322,7 @@ class Player {
                     pod.futureCheckpoint, noThrust, SECONDES_MAX, 500);
             
             int t = simul.tempsCheckpoint;
-            log("Temps virage parfait:", t, "pour thrust:", noThrust, "simul", simul);
+            logDebug("Temps virage parfait:", t, "pour thrust:", noThrust, "simul", simul);
             
             if (t <= SECONDES_MAX) {
                 if (noThrust == 0) {
@@ -332,7 +342,11 @@ class Player {
             noThrust++;
         }
     }
-         
+
+    /**
+     * Stratégie d'overshoot de la cible pour être plus rapidement dans l'axe.<br>
+     * TODO : Pourrait être avantageusement remplacée par une simulation
+     */
     private void strategieCorrectionDerive(Pod pod, Pod podPrec) {
         
         // Validation des conditions d'activation du neurone
@@ -398,6 +412,9 @@ class Player {
         pod.ordre.cible = v.doVtranslation(pod.nextCheckpoint);
     }
     
+    /**
+     * Affectation du checkpoint suivant comme cible par defaut
+     */
     private void strategieCibleParDefaut(Pod pod, Pod podPrec) {
         
         // Validation des conditions d'activation du neurone
@@ -414,17 +431,22 @@ class Player {
         pod.ordre.cible = pod.nextCheckpoint;
     }
     
-    private void defautThrust(Pod pod, Pod podPrec) {
+    /**
+     * Calcul du thrust pour atteindre le prochaine checkpoint.<br>
+     * Attention car certains checkpoints sont tellement proche qu'il est préférable de couper les
+     * thrust pour se mettre dans la bonne direction sinon on se met en orbite autour de la cible.
+     */
+    private void thrustIntelligent(Pod pod, Pod podPrec) {
         
         // Validation des conditions d'activation du neurone
         if (pod.mode == Mode.ATTAQUE) return;
-        if (pod.ordre.boost && Double.isNaN(pod.newThrust)) {
+        if (pod.ordre.boost || pod.ordre.thrust > -1) {
             return;
         }
         
         log("---- Strategie Defaut Thrust ----");
          
-        pod.newThrust = 100;
+        pod.ordre.thrust = 100;
 
         // Check pour voir s'il n'est pas préférable de couper le thrust
         int tempsAvecFullThrust = PAS_ATTEINT;
@@ -443,14 +465,14 @@ class Player {
                     noThrust /* noThrust */,
                     30 /* profMax */, 500 /* distance */);
             int t = simul.tempsCheckpoint;
-            log("Temps:", t, "pour thrust:", noThrust, "simul", simul);
+            logDebug("Temps:", t, "pour thrust:", noThrust, "simul", simul);
             
             if (noThrust == 0) {
                 tempsAvecFullThrust = t;
             } else {
                 if (t < tempsAvecFullThrust) {
                     log("!! Meilleur de couper le thrust", t, tempsAvecFullThrust);
-                    pod.newThrust = 0;
+                    pod.ordre.thrust = 0;
                     continuer = false;
                 }
             }
@@ -459,21 +481,21 @@ class Player {
         
     }
 
-    private void ordreThrust(Pod pod, Pod podPrec) {
+    /**
+     * Mise à jour si le boost a été demandé par le pod
+     */
+    private void ordreBoost(Pod pod, Pod podPrec) {
         
-        // Validation des conditions d'activation du neurone
-        if (pod.mode == Mode.ATTAQUE) return;
         if (pod.ordre.boost) {
             boostFait[pod.id] = true;
             return;
         }
-          
-        pod.ordre.thrust = Math.max(Math.min((int)pod.newThrust, 100), 0);
-        if (Math.abs(pod.nextCheckpointAngle) > MAX_ANGLE) pod.ordre.thrust = 0;
-        log("thrust brut:", pod.newThrust, " > ", pod.ordre.thrust);
         
     }
 
+    /**
+     * En mode attaque, on active le shield si on intercepte le pod adverse.
+     */
     private void shield(Pod pod, Pod podPrec) {
         
         // Validation des conditions d'activation du neurone
@@ -502,7 +524,7 @@ class Player {
         }
  
     }
-    
+
     private void modeAttaqueInterception(Pod pod, Pod podPrec) {
         
         // Validation des conditions d'activation du neurone
@@ -510,6 +532,7 @@ class Player {
         if (pod.ordre.shield) return;
         
         // Calculs
+        
         int ordreThrust = -1;
         Coords cible = null;
         
@@ -519,11 +542,12 @@ class Player {
         } else {
             idOpponent = 1;
         }
-        log("---- mode Attaque ----", idOpponent, opponents.get(idOpponent).nextCheckPointId);
+        log("---- mode Attaque ----", idOpponent, opponents.get(idOpponent).nextCheckpointId);
 
         // Simulation des prochaines coords de l'adversaire
-        Coords cibleOpponent = checkpoints.get(opponents.get(idOpponent).nextCheckPointId);
-        log("cibleOpponent:", cibleOpponent);
+        
+        Coords cibleOpponent = opponents.get(idOpponent).nextCheckpoint;
+        logDebug("cibleOpponent:", cibleOpponent);
 
         Simulation simul = simulationCheckpointEtNext(opponents.get(idOpponent),
                 cibleOpponent, cibleOpponent,
@@ -532,16 +556,26 @@ class Player {
 
         log("Adv au checkpoint suiv:", simul);
         
-        // Recherche d'une interception sur ces prochaines Coords
+        if (simul.tempsCheckpoint == PAS_ATTEINT) {
+            // D'après les calculs il ne va pas atteindre le check-point !!
+            // C'est certainement un pb de calcul.
+            // Choix bidouilleux : on va vers le checkpoint.
+            // TODO : faire quelque chose de plus logique !!
+            pod.ordre.thrust = 100;
+            pod.ordre.cible = cibleOpponent;
+            return;
+        }
         
-        for (int i=0; i<simul.ptPassage.size(); i++) {
+        // Recherche d'une interception sur ses prochaines Coords
+
+        for (int i=0; i<simul.ptPassage.size() && i<simul.tempsCheckpoint; i++) {
             Coords p = simul.ptPassage.get(i);
 
-            int thrust = thrustPourAtteindreCibleEnUnTemps(pod, p, i, 700);
+            int thrust = thrustPourAtteindreCibleEnUnTemps(pod, p, i+1, 700);
             
-            logDebug(" > interception:", p, "en:", i, "thrust", thrust);
+            log(" > interception:", p, "en:", i, "thrust", thrust);
             if (thrust > -1) {
-                log(" +++ choix");
+                log("+++ choix interception:", p, "en:", i, "thrust", thrust);
                 cible = p;
                 ordreThrust = thrust;
                 break;
@@ -559,14 +593,14 @@ class Player {
             
             int objectifTemps = 15; 
             if (simulCheckpoint.tempsCheckpoint < PAS_ATTEINT) {
-                cible = checkpoints.get(opponents.get(idOpponent).nextCheckPointId);
+                cible = checkpoints.get(opponents.get(idOpponent).nextCheckpointId);
                 objectifTemps = simul.tempsCheckpoint;
             } else {
-                cible = getCheckpointFuture(opponents.get(idOpponent).nextCheckPointId);
+                cible = getCheckpointFuture(opponents.get(idOpponent).nextCheckpointId);
             }
             log("Aller sur checkpoint:", simulCheckpoint, "cible", cible);
             
-            Coords checkpointPartenaire = checkpoints.get(pods.get(1-pod.id).nextCheckPointId);
+            Coords checkpointPartenaire = checkpoints.get(pods.get(1-pod.id).nextCheckpointId);
             log("Checkpoint du partenaire:", checkpointPartenaire);
             if (cible.equals(checkpointPartenaire)) {
                 cible = new Coords(8000, 4500);
@@ -582,6 +616,7 @@ class Player {
             if (simulSansThrust.tempsCheckpoint < PAS_ATTEINT) {
                 log("On peut l'atteindre sans thrust:", cible);
                 ordreThrust = 0;
+                cible = cibleOpponent; // on bascule vers une future position de l'adversaire
             } else {
                 ordreThrust = 100;
             }
@@ -592,15 +627,24 @@ class Player {
         pod.ordre.cible = cible;
         
     }
+    
+    /**
+     * Récupération du checkpoint qui suit l'id donné.
+     */
 
     private Coords getCheckpointFuture(int id) {
-        if (id < checkpoints.size() - 1) {
-            return checkpoints.get(id+1);
-        } else {
-            return checkpoints.get(0);
-        }
+        int futureId = (id + 1) % checkpoints.size();
+        return checkpoints.get(futureId);
     }
 
+    /**
+     * Simulation pour savoir si une unité va atteindre le checkpoint tout en pointant le suivant.<br>
+     * Peut être utilisé pour faire des simulation sur une seul cible si checkpoint = cible.
+     * @param noThrust Nb de round à simuler sans thrust ensuite thrust = 100
+     * @param profMax Profondeur max de la simulation
+     * @param distance Distance du checkpoint qui valide la passage.
+     * @return
+     */
     public Simulation simulationCheckpointEtNext(Unit unit,
             Coords checkpoint, Coords cible, int noThrust, int profMax, int distance) {
         
@@ -661,6 +705,10 @@ class Player {
         return ret;
     }
     
+    /**
+     * Simulation qui permet de savoir s'il faut ou non mettre du thrust pour atteindre une cible 
+     * en un temps donné.
+     */
     int thrustPourAtteindreCibleEnUnTemps(Unit unit, Coords cible, int temps, int distance) {
 
         int noThrust = 0; // Test de zéro thrust successif 
@@ -680,7 +728,6 @@ class Player {
     }
     
     class Pod extends Unit {
-        Coords nextCheckpoint = new Coords();
         double nextCheckpointDist; // distance to the next checkpoint
         int nextCheckpointAngle; // angle between your pod orientation and the direction of the next checkpoint
 
@@ -694,7 +741,6 @@ class Player {
         double distOpponentAuCheckpoint = Double.NaN; 
         double distOpponentAuPod; 
 
-        double newThrust = Double.NaN;
         Ordre ordre = new Ordre();
         Mode mode;
     }
@@ -703,8 +749,20 @@ class Player {
         int id;
         Coords v = new Coords(); // speed of your pod
         int angle; // angle of your pod
-        int nextCheckPointId; // next check point id of your pod
+        int nextCheckpointId; // next check point id of your pod
+        Coords nextCheckpoint;
         int rang = 0;
+    }
+    
+    class Ordre {
+        Coords cible = null;
+        boolean boost = false;
+        boolean shield = false;
+        int thrust = -1;
+        
+        String toCommand() {
+            return ""+cible.getIntX()+" "+cible.getIntY()+" "+(shield ? "SHIELD" : (boost?"BOOST":thrust));
+        }
     }
     
     class Simulation {
@@ -718,17 +776,7 @@ class Player {
             return "[tpsCible:" + tempsCible + ", tpsCP:" + tempsCheckpoint + "]";
         }
     }
-    
-    class Ordre {
-        Coords cible = null;
-        boolean boost = false;
-        boolean shield = false;
-        int thrust;
-        
-        String toCommand() {
-            return ""+cible.getIntX()+" "+cible.getIntY()+" "+(shield ? "SHIELD" : (boost?"BOOST":thrust));
-        }
-    }
+
     /* Codingame common */
     
     static void log(Object... objects) {
@@ -767,8 +815,8 @@ class Player {
 
 
 class Coords {
-    /* static */ int MAX_X = 17_630;
-    /* static */ int MAX_Y = 9_000;
+    static final int MAX_X = 17_630;
+    static final int MAX_Y = 9_000;
 
     double x;
     double y;
@@ -776,7 +824,6 @@ class Coords {
     public Coords() {}
 
     public Coords(double x, double y) {
-        super();
         this.x = x;
         this.y = y;
     }
@@ -786,19 +833,32 @@ class Coords {
         return dist;
     }
 
+    /**
+     * Distance au carré (permet d'économiser la racine carrée)
+     */
     double distance2(Coords c2) {
         double distX = x - c2.x;
         double distY = y - c2.y;
         return distX * distX + distY * distY;
     }
 
+    /**
+     * Compare si la distance à la cible est inférieur (<0) ou supérieure (>0) à une valeur.<br>
+     * N'utilise pas la racine carrée.
+     */
     public int compareDistance(Coords cible, double val) {
         double dist2 = distance2(cible);
         double val2 = val * val;
         if (dist2 == val2) return 0;
         return dist2 < val2 ? -1 : 1;
     }
-    
+
+    /**
+     * Compare si la distance à C1 est plus proche que C2<br>
+     * Si négatif, elle est plus proche.<br>
+     * N'utilise pas la racine carrée.
+     */
+
     public int compareDistance(Coords c1, Coords c2) {
         double dist1 = distance2(c1);
         double dist2 = distance2(c2);
@@ -813,7 +873,8 @@ class Coords {
     
     /**
      * Retourne un point au dela du point2.
-     * TODO : ajout d'un controle si on sort de la carte ou pas
+     * Attention, on peut sortir de la carte.<br>
+     * TODO : Faire une fonction sans distance qui n'aurait pas de cacluls complexes.
      */
 
     Coords getAuDelaDe(Coords point2, double distance) {
@@ -841,9 +902,9 @@ class Coords {
      * Calcul un point entre 2 points ou en dehors dans une direction ou une autre.
      * 
      * @param 2ème point du segment
-     * @param p Si entre 0 et le point est entre les bornes du segment.
+     * @param p Si entre 0 et 1, le point est entre les bornes du segment.
      *          si 0.5, alors le point est au millieu.
-     *          si 2 alors le point est à une fois la longueur du segment dans la direction de c2 opposé à this..
+     *          si 2 alors le point est à une fois la longueur du segment dans la direction de c2 opposé à this.
      *          si -2 alors le point est à une fois la longueur du segment dans la direction de this opposé à c2.
      * @return
      */
@@ -851,6 +912,9 @@ class Coords {
         return new Coords (this.x + (c2.x - this.x) * p, this.y + (c2.y - this.y) * p);
     }
      
+    /**
+     * TODO : permettre une marge d'erreur de 1. 
+     */
     boolean equals(Coords c2) {
         return x == c2.x && y == c2.y; 
     }
@@ -875,7 +939,7 @@ class Coords {
     }
     
     /**
-     * Retourne le vecteur qui fait la translation vers le point2.
+     * Retourne le vecteur qui fait la translation vers le point "to".
      */
             
     Coords createVecteurVers(Coords to) {
@@ -890,6 +954,10 @@ class Coords {
         Coords vectorVersPoint2 = createVecteurVers(point2);
         return new Coords().createVFromFormeTrigono(vectorVersPoint2.getVAngle(), distance);
     }
+
+    /**
+     * Retourne le vecteur qui fait la translation à partir du point "from".
+     */
     
     Coords createVecteurAPartirDe(Coords from) {
         return new Coords(x - from.x, y - from.y);
@@ -937,6 +1005,10 @@ class Coords {
         return new AngleEnDegres().ofRadian(vB.getVAngle()-vA.getVAngle()); 
     }
     
+    /**
+     * TODO faire des rotations triviales sans calculs tigonométriques<br>
+     * Exemple : inversion, quart de tour horaire/anti-horaire.
+     */
     Coords rotation(double angleAjout) {
         return new Coords().createVFromFormeTrigono(getVAngle()+angleAjout, getVNorme());
     }
@@ -945,11 +1017,11 @@ class Coords {
         return String.format("Coords [x=%.2f, y=%.2f, angle=%.2f(%s°), norme=%.2f]", x, y, getVAngle(), getVAngleDegres(), getVNorme());
     }
     
-    /* static */ Comparator<Coords> duPlusProcheAuPlusLoin(Coords base) {
+    static Comparator<Coords> duPlusProcheAuPlusLoin(Coords base) {
         return new DistanceToBaseComparator(base, 1);
     }
 
-    /* static */ Comparator<Coords> duPlusLoinAuPlusProche(Coords base) {
+    static Comparator<Coords> duPlusLoinAuPlusProche(Coords base) {
         return new DistanceToBaseComparator(base, -1);
     }
 
@@ -969,7 +1041,7 @@ class AngleEnDegres {
     }
 
     /* Constructeur a partir de radian */
-    /* static */ public AngleEnDegres ofRadian(double radian) {
+    public static AngleEnDegres ofRadian(double radian) {
         double temp = (radian / (2 * Math.PI)) * 360; 
         return new AngleEnDegres(temp);
     }
@@ -981,7 +1053,6 @@ class AngleEnDegres {
     int getIntAngle() {
         return new Double(angle).intValue();
     }
-    
     
     @Override
     public AngleEnDegres clone() {
@@ -1012,16 +1083,22 @@ class AngleEnDegres {
     public AngleEnDegres retire(AngleEnDegres angle2) {
         return retire(angle2.angle);
     }
-
+    
+    /**
+     * Ecart en degré entre 2 angles.
+     */
     public AngleEnDegres ecart(AngleEnDegres cible) {
         AngleEnDegres ret = new AngleEnDegres(angle - cible.angle);
         ret.normalize();
         return ret;
     }
 
-    public boolean estProcheDe(double angle2, double delta) {
+    /**
+     * Vérifie si un angle est proche d'un autre (avec une marge d'erreur)
+     */
+    public boolean estProcheDe(double angle2, double margeErreur) {
         AngleEnDegres temp = new AngleEnDegres(angle - angle2);
-        return delta > temp.angle && temp.angle > -delta;
+        return margeErreur > temp.angle && temp.angle > -margeErreur;
     }
 
     @Override
@@ -1032,8 +1109,8 @@ class AngleEnDegres {
 }
 
 class DistanceToBaseComparator implements Comparator<Coords> {
-    int ASC = 1;
-    int DESC = -1;
+    public static final int ASC = 1;
+    public static final int DESC = -1;
     
     Coords base;
     int order;
@@ -1046,7 +1123,7 @@ class DistanceToBaseComparator implements Comparator<Coords> {
 
     @Override
     public int compare(Coords arg0, Coords arg1) {
-        return arg0.distance(base) < arg1.distance(base) ? -1 * order : 1 * order;
+        return arg0.distance2(base) < arg1.distance2(base) ? -1 * order : 1 * order;
     }
 
 }

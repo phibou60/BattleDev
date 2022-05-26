@@ -80,6 +80,7 @@ public class JUnitTest {
         assertEquals(400, listDesc.get(0).x);
     }
 
+    /*
     @Test
     public void testInterception() throws Exception {
         Pion m = new Pion();
@@ -99,7 +100,7 @@ public class JUnitTest {
         assertEquals(4, interc.round);
 
     }
-    
+    */
     @Test
     public void testPion() throws Exception {
 
