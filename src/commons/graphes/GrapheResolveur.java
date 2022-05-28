@@ -1,5 +1,6 @@
 package commons.graphes;
 
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -9,15 +10,14 @@ import java.util.stream.Collectors;
  *
  */
 class GrapheResolveur {
-
+    public static final int PAS_ATTEINT = Integer.MAX_VALUE;
     int nbSommets;
     LinkedList<int[]> arcs = new LinkedList<>();
     
     // Données de recherche du chemin le plus court
-    int from;
-    int to;
-    int[] minDistance;
-    int[] predecesseurs;
+    int from = -1;
+    int[] minDistance = null;
+    int[] predecesseurs = null;
 
     public GrapheResolveur(int nbSommets) {
         super();
@@ -34,6 +34,7 @@ class GrapheResolveur {
         arc[2] = 1;
         arc[3] = 1;
         arcs.add(arc);
+        this.from = -1;
     }
 
     /**
@@ -46,6 +47,7 @@ class GrapheResolveur {
         arc[2] = length;
         arc[3] = length;
         arcs.add(arc);
+        this.from = -1;
     }
     
     /**
@@ -58,14 +60,30 @@ class GrapheResolveur {
         arc[2] = length;
         arc[3] = lengthReturn;
         arcs.add(arc);
+        this.from = -1;
     }
+    
+    /**
+     * Suppression d'un arc (dans les 2 sens).
+     */
+    public void suppressArc(int from, int to) {
+        
+        int selection = -1;
+        
+        for (int i=0; i<arcs.size(); i++) {
+            int[] arc = arcs.get(i);
+            if ((arc[0] == from && arc[1] == to) || (arc[0] == to && arc[1] == from)) {
+                selection = i;
+            }
+        }
+        arcs.remove(selection); 
+        this.from = -1;
+   }
     
     /**
      * Algo de Dijkstra.
      */
-    public int cheminLePlusCourt(int from, int to) {
-        this.from = from;
-        this.to = to;
+    private void exploreProfondeurAPartirDe(int from) {
 
         // Initialisation
         
@@ -75,7 +93,7 @@ class GrapheResolveur {
         
         for (int i = 0; i < nbSommets; i++) {
             dejaVu[i] = false;
-            minDistance[i] = Integer.MAX_VALUE;
+            minDistance[i] = PAS_ATTEINT;
             predecesseurs[i] = -1;
         }
         
@@ -97,30 +115,71 @@ class GrapheResolveur {
                 }
             });
         }
-
-        return minDistance[to];
+        this.from = from;
     }
-
-    /**
-     * Récupération de la liste de sommets du plus petit chemin. 
-     */
-    LinkedList<Integer> chemin() {
     
-        LinkedList<Integer> ret = new LinkedList<>();
-        ret.add(to);
-        int s = to;
-        while (s != -1 && s != from) {
-            s = predecesseurs[s];
-            ret.addFirst(s);
+    /**
+     * Récupération de la liste de sommets qui forment le chemin le plus court. 
+     */
+    public LinkedList<Integer> cheminLePlusCourt(int from, int to) {
+        
+        if (minDistance == null || this.from != from) exploreProfondeurAPartirDe(from);
+            
+        LinkedList<Integer> result = new LinkedList<>();
+        if (predecesseurs[to] != -1) { 
+            result.add(to);
+            int s = to;
+            while (s != -1 && s != from) {
+                s = predecesseurs[s];
+                result.addFirst(s);
+            }
         }
+        return result;        
+    }
+    
+    /**
+     * Répond vrai si le sommet peut être atteint à partir d'un autre. 
+     */
+    public boolean estAtteint(int from, int to) {
+        
+        if (minDistance == null || this.from != from) exploreProfondeurAPartirDe(from);
+            
+        return minDistance[to] != PAS_ATTEINT;
+        
+    }
+    
+    /**
+     * Distance pour aller d'un sommet à un autre. 
+     */
+    public int distance(int from, int to) {
+        
+        if (minDistance == null || this.from != from) exploreProfondeurAPartirDe(from);
+            
+        return minDistance[to];
+        
+    }
+    
+    /**
+     * Liste des sommets atteignables. 
+     */
+    public ArrayList<Integer> sommetsAtteignables(int from) {
+        
+        if (minDistance == null || this.from != from) exploreProfondeurAPartirDe(from);
+        
+        ArrayList<Integer> ret = new ArrayList<>();
+        for (int i=0; i<minDistance.length; i++) {
+            if (minDistance[i] != PAS_ATTEINT) ret.add(i);
+        }
+        
         return ret;
         
     }
     
     /**
+     * Methode interne.<br>
      * Sélectionner le sommet de plus petite distance pas déjà visité.  
      */
-    int choisirSommetPlusPetiteDistancePasDejaVu(boolean[] dejaVu, int[] minDistance) {
+    private int choisirSommetPlusPetiteDistancePasDejaVu(boolean[] dejaVu, int[] minDistance) {
         int selection = -1;
         int distance = Integer.MAX_VALUE;
         
@@ -135,6 +194,7 @@ class GrapheResolveur {
     }
     
     /**
+     * Methode interne.<br>
      * Recherche des arcs qui partent d'un sommet.
      */
     
@@ -154,21 +214,5 @@ class GrapheResolveur {
             })
             .collect(Collectors.toList());
     }
-    
-    /**
-     * Suppression d'un arc (dans les 2 sens).
-     */
-    void suppressArc(int from, int to) {
-        
-        int selection = -1;
-        
-        for (int i=0; i<arcs.size(); i++) {
-            int[] arc = arcs.get(i);
-            if ((arc[0] == from && arc[1] == to) || (arc[0] == to && arc[1] == from)) {
-                selection = i;
-            }
-        }
-        arcs.remove(selection); 
-   }
    
 }

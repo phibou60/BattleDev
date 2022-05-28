@@ -3,6 +3,7 @@ package commons.graphes;
 import static org.junit.Assert.*;
 
 import java.util.LinkedList;
+import java.util.List;
 
 import org.junit.Test;
 
@@ -26,11 +27,11 @@ public class GrapheResolveurTest {
         gr.ajoutArc(3, 6, 3); // dg3 
         gr.ajoutArc(4, 6, 5); // eg5
         
-        int lg = gr.cheminLePlusCourt(0, 6);
-        assertEquals(6, lg);
+        LinkedList<Integer> chemin = gr.cheminLePlusCourt(0, 6);
+        
+        assertEquals(6, gr.distance(0, 6));
         
         System.out.println("chemin:");
-        LinkedList<Integer> chemin = gr.chemin();
         chemin.forEach(System.out::println);
         assertEquals(0, chemin.get(0).intValue());
         assertEquals(1, chemin.get(1).intValue());
@@ -41,16 +42,19 @@ public class GrapheResolveurTest {
         
         gr.suppressArc(3, 6);
         
-        lg = gr.cheminLePlusCourt(0, 6);
-        assertEquals(8, lg);
+        chemin = gr.cheminLePlusCourt(0, 6);
+        assertEquals(8, gr.distance(0, 6));
         
-        System.out.println("chemin:");
-        chemin = gr.chemin();
-        chemin.forEach(System.out::println);
+        //System.out.println("chemin:");
+        //chemin.forEach(System.out::println);
         assertEquals(0, chemin.get(0).intValue());
         assertEquals(1, chemin.get(1).intValue());
         assertEquals(5, chemin.get(2).intValue());
         assertEquals(6, chemin.get(3).intValue());
+        
+        List<Integer> sommetsAtteignables = gr.sommetsAtteignables(0);
+        System.out.println("sommetsAtteignables:");
+        sommetsAtteignables.forEach(System.out::println);
         
     }
 
