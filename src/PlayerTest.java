@@ -1,7 +1,5 @@
 
-
 import java.io.InputStream;
-import java.util.Arrays;
 
 public class PlayerTest {
 
@@ -12,7 +10,7 @@ public class PlayerTest {
             
             InputStream inStream = player.getClass().getClassLoader()
                     .getResourceAsStream("input.txt");
-            player.activateLog();
+            //player.activateLog();
             player.joue(inStream);
 
         } catch (Exception e) {
