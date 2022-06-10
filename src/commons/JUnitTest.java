@@ -16,15 +16,11 @@ public class JUnitTest {
         Coords staticCoords = new Coords();
         
         Coords from = new Coords(50, 100);
-        Coords to = new Coords(916, 600);
+        assertEquals(50, from.getIntX());
+        assertEquals(100, from.getIntY());
+        assertTrue(from.equals(new Coords(50, 100)));
         
-        assertTrue(new Coords(100, 100).dansLaCarte());
-        assertTrue(new Coords(staticCoords.MAX_X, staticCoords.MAX_Y).dansLaCarte());
-        assertFalse(new Coords(-1, -1).dansLaCarte());
-        assertFalse(new Coords(100, -1).dansLaCarte());
-        assertFalse(new Coords(-1, 100).dansLaCarte());
-        assertFalse(new Coords(staticCoords.MAX_X+1, 100).dansLaCarte());
-        assertFalse(new Coords(100, staticCoords.MAX_Y+1).dansLaCarte());
+        Coords to = new Coords(916, 600);
         
         assertEquals(999, from.distance(to));
         
@@ -33,7 +29,12 @@ public class JUnitTest {
         assertEquals(500, vector1.y);
         assertEquals(999, vector1.getVNorme());
         assertEquals(0.52D, vector1.getVAngle());
-                    
+        
+        {// Test createVecteurAPartirDe
+            Coords vector1b = to.createVecteurAPartirDe(from);
+            assertTrue(vector1.equals(vector1b));
+        }
+                            
         Coords to2 = vector1.doVtranslation(from);
         assertEquals(to.x, to2.x);
         assertEquals(to.y, to2.y);
@@ -54,30 +55,141 @@ public class JUnitTest {
         assertEquals(866, vector2.x);
         assertEquals(500, vector2.y);
         
-        // Comparators
+        { // test dansLaCarte
+            assertTrue(new Coords(100, 100).dansLaCarte());
+            assertTrue(new Coords(staticCoords.MAX_X, staticCoords.MAX_Y).dansLaCarte());
+            assertFalse(new Coords(-1, -1).dansLaCarte());
+            assertFalse(new Coords(100, -1).dansLaCarte());
+            assertFalse(new Coords(-1, 100).dansLaCarte());
+            assertFalse(new Coords(staticCoords.MAX_X+1, 100).dansLaCarte());
+            assertFalse(new Coords(100, staticCoords.MAX_Y+1).dansLaCarte());
+        }
+
+        { // test getAuDelaDe
+            Coords base = new Coords(1200, 400);
+            Coords dela = base.getAuDelaDe(new Coords(1450, 650));
+            assertEquals(1700, dela.x);
+            assertEquals(900, dela.y);
+            Coords dela2 = base.getAuDelaDe(new Coords(1450, 650), 353.55);
+            assertEquals(1699, dela2.x);
+            assertEquals(899, dela2.y);
+            
+         // test getPointOppose
+            Coords op = base.getPointOppose(new Coords(1450, 650));
+            assertEquals(950, op.x);
+            assertEquals(150, op.y);
+            Coords op2 = base.getPointOppose(new Coords(1450, 650), 353.55);
+            assertEquals(950, op2.x);
+            assertEquals(150, op2.y);
+        }
+
+        { // test getPointVers
+            Coords base = new Coords(1200, 400);
+            Coords dela = base.getPointVers(new Coords(1950, 1150), 353);
+            assertEquals(1449, dela.x);
+            assertEquals(649, dela.y);
+        }
+
+        { // test rotation
+            Coords v = new Coords(250, 150);
+            Coords quartAH = v.rotationQuartTourAntiHoraire();
+            assertEquals(-150, quartAH.x);
+            assertEquals(250, quartAH.y);
+            Coords quartH = v.rotationQuartTourHoraire();
+            assertEquals(150, quartH.x);
+            assertEquals(-250, quartH.y);
+            
+            Coords quartAH2 = v.rotation(Math.PI/2);
+            assertEquals(-150, quartAH2.x);
+            assertEquals(250, quartAH2.y);
+            Coords quartH2 = v.rotation(-Math.PI/2);
+            assertEquals(149, quartH2.x);
+            assertEquals(-250, quartH2.y);
+        }
+
+        { // test getPointVers
+            Coords base = new Coords(1200, 400);
+            Coords dela = base.getPointVers(new Coords(1950, 1150), 353);
+            assertEquals(1449, dela.x);
+            assertEquals(649, dela.y);
+        }
+
+        { // test compareDistance (a est plus proche que b de la base)
+            Coords base = new Coords(1200, 400);
+            Coords a = new Coords(1450, 650);
+            Coords b = new Coords(900, 100);
+            assertTrue(base.compareDistance(a, b) < 0);
+            assertTrue(base.compareDistance(b, a) > 0);
+            assertTrue(base.compareDistance(a, 400) < 0);
+            assertTrue(base.compareDistance(b, 400) > 0);
+        }
+
+        { // test pointSurSegment
+            Coords base = new Coords(1200, 400);
+            Coords a = new Coords(1400, 600);
+            
+            Coords mi = base.pointSurSegment(a, 0.5);
+            assertEquals(1300, mi.x);
+            assertEquals(500, mi.y);
+
+            Coords quart = base.pointSurSegment(a, 0.25);
+            assertEquals(1250, quart.x);
+            assertEquals(450, quart.y);
+        }
         
-        List<Coords> list = new ArrayList<>();
-        list.add(new Coords(100, 100));
-        list.add(new Coords(300, 300));
-        list.add(new Coords(200, 200));
-        list.add(new Coords(400, 400));
-        Coords base = new Coords(220, 220);
+        {// Test getVAngleDegres
+            Coords v = new Coords(200, 200);
+            assertEquals(45, v.getVAngleDegres().angle);
+
+            v = new Coords(-200, 200);
+            assertEquals(90+45, v.getVAngleDegres().angle);
+        }
         
-        List<Coords> listAsc = list.stream()
-                .sorted(staticCoords.duPlusProcheAuPlusLoin(base))
-                .collect(Collectors.toList());
-        assertEquals(200, listAsc.get(0).x);
-        assertEquals(300, listAsc.get(1).x);
-        assertEquals(100, listAsc.get(2).x);
-        assertEquals(400, listAsc.get(3).x);
+        {// Test ajoute et soustrait vecteurs
+            Coords v1 = new Coords(200, 200);
+            Coords v2 = new Coords(300, 100);
+            
+            Coords v3 = v1.ajouteVecteur(v2);
+            assertEquals(500, v3.x);
+            assertEquals(300, v3.y);
+            
+            Coords v4 = v3.soustraitVecteur(v2); 
+            assertTrue(v4.equals(v1));
+        }
         
-        List<Coords> listDesc = list.stream()
-                .sorted(staticCoords.duPlusLoinAuPlusProche(base))
-                .collect(Collectors.toList());
-        assertEquals(200, listDesc.get(3).x);
-        assertEquals(300, listDesc.get(2).x);
-        assertEquals(100, listDesc.get(1).x);
-        assertEquals(400, listDesc.get(0).x);
+        {// Test angleVecteurs
+            Coords base = new Coords(0, 0);
+            Coords a = new Coords(200, 200);
+            Coords b = new Coords(-200, 200);
+            
+            assertEquals(90, base.angleVecteurs(a, b).angle);
+            assertEquals(-90, base.angleVecteurs(b, a).angle);
+        }
+             
+        { // Comparators
+            List<Coords> list = new ArrayList<>();
+            list.add(new Coords(100, 100));
+            list.add(new Coords(300, 300));
+            list.add(new Coords(200, 200));
+            list.add(new Coords(400, 400));
+            Coords base = new Coords(220, 220);
+            
+            List<Coords> listAsc = list.stream()
+                    .sorted(staticCoords.duPlusProcheAuPlusLoin(base))
+                    .collect(Collectors.toList());
+            assertEquals(200, listAsc.get(0).x);
+            assertEquals(300, listAsc.get(1).x);
+            assertEquals(100, listAsc.get(2).x);
+            assertEquals(400, listAsc.get(3).x);
+            
+            List<Coords> listDesc = list.stream()
+                    .sorted(staticCoords.duPlusLoinAuPlusProche(base))
+                    .collect(Collectors.toList());
+            assertEquals(200, listDesc.get(3).x);
+            assertEquals(300, listDesc.get(2).x);
+            assertEquals(100, listDesc.get(1).x);
+            assertEquals(400, listDesc.get(0).x);
+        }
     }
 
     /*

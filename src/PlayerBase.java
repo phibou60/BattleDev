@@ -20,7 +20,7 @@ public class PlayerBase {
     static void log(Object... objects) {
         if (doLog) {
             for (Object o : objects) {
-                System.err.print(o.toString() + " ");
+                System.err.print("" + o + " ");
             }
             System.err.println();
         }
@@ -34,7 +34,7 @@ public class PlayerBase {
         if (doLogDebug) {
             System.err.print("*");
             for (Object o : objects) {
-                System.err.print(o.toString() + " ");
+                System.err.print("" + o + " ");
             }
             System.err.println();
         }

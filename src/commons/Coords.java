@@ -66,19 +66,27 @@ class Coords {
     }
     
     /**
-     * Retourne un point au dela du point2.
-     * Attention, on peut sortir de la carte.<br>
-     * TODO : Faire une fonction sans distance qui n'aurait pas de cacluls complexes.
+     * Retourne un point au dela du point2.<br>
+     * Attention, on peut sortir de la carte.
      */
 
+    Coords getAuDelaDe(Coords point2) {
+         return new Coords(point2.x + point2.x - x, point2.y + point2.y - y);
+    }
+    
     Coords getAuDelaDe(Coords point2, double distance) {
         Coords vector2d = createVecteurVers(point2);
         return vector2d.doVtranslation(point2, distance);
     }
 
     /**
-     * Retourne un point opposé au point2.
+     * Retourne un point opposé au point2.<br>
+     * Attention, on peut sortir de la carte.
      */
+    
+    Coords getPointOppose(Coords point2) {
+        return new Coords(x + x - point2.x, y + y - point2.y);
+    }
     
     Coords getPointOppose(Coords point2, double distance) {
         return point2.getAuDelaDe(this, distance);
@@ -188,8 +196,8 @@ class Coords {
     
     /**
      * Calcule l'angle entre les vecteurs l'un vers A, l'autre vers B.<br>
-     * Le résultat est positif si le segment vers B est dans le sens horaire vis-à-vis de celui
-     * vers A.
+     * Le résultat est négatif si le segment vers B est dans le sens horaire
+     * vis-à-vis de celui vers A car on utilise le sens trigonométrique.
      * 
      */
     
@@ -200,9 +208,16 @@ class Coords {
     }
     
     /**
-     * TODO faire des rotations triviales sans calculs tigonométriques<br>
-     * Exemple : inversion, quart de tour horaire/anti-horaire.
+     * Rotation de vecteurs.
      */
+    Coords rotationQuartTourAntiHoraire() {
+        return new Coords(-y, x);
+    }
+
+    Coords rotationQuartTourHoraire() {
+        return new Coords(y, -x);
+    }
+    
     Coords rotation(double angleAjout) {
         return new Coords().createVFromFormeTrigono(getVAngle()+angleAjout, getVNorme());
     }
