@@ -10,6 +10,11 @@ public class PlayerBase {
     
     void joue(InputStream inStream) {
         Scanner in = new Scanner(inStream);
+        
+        long timeStart = System.nanoTime();
+        /* ... */
+        System.err.println("Duree: "+Math.floorDiv(System.nanoTime()-timeStart, 1_000_000)+"ms");
+        
     }
 
     /* Codingame common */

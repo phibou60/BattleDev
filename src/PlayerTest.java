@@ -11,6 +11,7 @@ public class PlayerTest {
             InputStream inStream = player.getClass().getClassLoader()
                     .getResourceAsStream("input.txt");
             player.activateLog();
+            player.activateLogDebug();
             player.joue(inStream);
 
         } catch (Exception e) {
