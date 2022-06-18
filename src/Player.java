@@ -1,32 +1,25 @@
-import java.io.InputStream;
 import java.util.*;
+import java.util.stream.IntStream;
+import java.io.*;
 
 /**
- * Principe : au premier passage on calcule le plan entier en établissant un arbre de tous les cas possible 
- * à l'aide d'une fonction récursive.
- */
-
- // TODO : Le code fonctionne mais sur Piège (test 08), il calcule de réussir le puzzle en 64 rounds alors
- // qu'il le fait en réalité en 67.
-
+ * Complete the hackathon before your opponent by following the principles of Green IT
+ **/
 class Player {
 
-    static boolean doLog = false;
-    static String[] logFilters = null; // new String[] {"##11:", "####w10:", "##x####2:", "coup suiv"};
+    int releaseCount = 0;
     
-    int nbFloors;
-    int width;
-    int nbRounds;
-    int exitFloor;
-    int exitPos;
-    int nbTotalClones;
-    int nbAdditionalElevators;
-    int nbElevators;
-    
-    Coup planComplet = null;
-    
-    List<Elevator> elevators;
-
+    int[][] proche = new int[][] {
+        {1, 1, 0, 0, 0, 0, 0, 1},
+        {1, 1, 1, 0, 0, 0, 0, 0},
+        {0, 1, 1, 1, 0, 0, 0, 0},
+        {0, 0, 1, 1, 1, 0, 0, 0},
+        {0, 0, 0, 1, 1, 1, 0, 0},
+        {0, 0, 0, 0, 1, 1, 1, 0},
+        {0, 0, 0, 0, 0, 1, 1, 1},
+        {0, 0, 0, 0, 0, 0, 1, 1}        
+    }; 
+        
     public static void main(String args[]) {
         Player player = new Player();
         player.joue(System.in);
@@ -35,393 +28,310 @@ class Player {
     void joue(InputStream inStream) {
         Scanner in = new Scanner(inStream);
 
-        nbFloors = in.nextInt(); // number of floors
-        width = in.nextInt(); // width of the area
-        nbRounds = in.nextInt(); // maximum number of rounds
-        exitFloor = in.nextInt(); // floor on which the exit is found
-        exitPos = in.nextInt(); // position of the exit on its floor
-        nbTotalClones = in.nextInt(); // number of generated clones
-        nbAdditionalElevators = in.nextInt(); // number of additional elevators that you can build
-        nbElevators = in.nextInt(); // number of elevators
-        
-        elevators = new ArrayList<>(nbElevators);
-                
-        System.err.println(nbFloors+" "+width+" "+nbRounds+" "+exitFloor+" "+exitPos+" "
-                +nbTotalClones+" "+nbAdditionalElevators+" "+nbElevators);
-                
-        for (int i = 0; i < nbElevators; i++) {
-            
-            int elevatorFloor = in.nextInt(); // floor on which this elevator is found
-            int elevatorPos = in.nextInt(); // position of the elevator on its floor
-            
-            System.err.println(elevatorFloor+" "+elevatorPos);
-            
-            elevators.add(new Elevator(elevatorFloor, elevatorPos));
-        }
-
         // game loop
-        int i = 1;
         while (true) {
-            long timeStart = System.nanoTime();
+            Etat etat = new Etat();
             
-            int cloneFloor = in.nextInt(); // floor of the leading clone
-            int clonePos = in.nextInt(); // position of the leading clone on its floor
-            String direction = in.next(); // direction of the leading clone: LEFT or RIGHT
-
-            System.err.println(cloneFloor+" "+clonePos+" "+direction);
-            System.err.println("Round: "+i);
-
-            if (cloneFloor == -1) {
-                // Coup forcé
-                System.out.println("WAIT");
-            } else {
-                Etat etat = new Etat(cloneFloor, clonePos, direction, nbRounds, nbTotalClones, nbAdditionalElevators);
-                Coup coup = strategie(etat);
-
-                if (coup.ordre.equals("ELEVATOR")) {
-                    elevators.add(new Elevator(cloneFloor, clonePos));
-                }
-               
-                System.err.println("Duree: "+Math.floorDiv(System.nanoTime()-timeStart, 1_000_000)+"ms");
-                System.out.println(coup.ordre);
-            }
-            i++;
-        }
-
-    }
-
-    private Coup strategie(Etat etat) {
-
-        if (planComplet == null) {
-            recherchePlanComplet(etat);
-            return planComplet;
-        } else {
-            return appliquerLePlan(etat);
-        }
-        
-    }
-
-    /**
-     * Ce code ne fait qu'appliquer le plan déjà défini.
-     */
-    private Coup appliquerLePlan(Player.Etat etat) {
-        
-        // Recherche de l'ascenceur à prendre
-        
-        Elevator elevator = null;
-        Coup coupSuiv = planComplet;
-        while (coupSuiv != null) {
-            if (coupSuiv.elevator.floor == etat.floor) {
-                elevator = coupSuiv.elevator;
-                logDebug("Ascenceurt a prendre:", elevator);
-                break;
-            }
-            logDebug("coup suiv:", coupSuiv);
-            coupSuiv = coupSuiv.coupSuivant;
-        }
-        
-        boolean surUnElevator = estOnSurUnElevator(etat);
-        
-        Coup coup = new Coup();
-        coup.ordre = "WAIT";
-        
-        if (etat.pos == elevator.pos && !surUnElevator) {
-            coup.ordre = "ELEVATOR"; // On est sur le bon elevator mais il n'y en a pas encore 
-        } else  if (etat.pos == elevator.pos) {
-            coup.ordre = "WAIT"; // On est sur le bon elevator
-        } else if ((etat.pos < elevator.pos && etat.direction.equals("LEFT"))
-                || (elevator.pos < etat.pos && etat.direction.equals("RIGHT"))) {
-            coup.ordre = "BLOCK";
-        }
-        
-        return coup;
-    }
-
-    /**
-     * Check si on est actuellement sur un ascenceur.
-      */
-    private boolean estOnSurUnElevator(Etat etat) {
-        return elevators.stream()
-                .anyMatch(e -> e.floor == etat.floor && e.pos == etat.pos);
-    }
-    
-    /**
-     * Calcul du plan complet.
-     */
-    private void recherchePlanComplet(Etat etat) {
-        log("Etat:", etat);
-        planComplet = calculDistanceRecursive(etat, exitFloor);
-        
-        // log du plan complet
-        Coup coupSuiv = planComplet;
-        while (coupSuiv != null) {
-            System.err.println("coup suiv: " + coupSuiv);
-            coupSuiv = coupSuiv.coupSuivant;
-        }
-    }
-
-    /**
-     * Genère les coups possibles d'un niveau et appelle pour chaque coups la même fonction pour le niveau suivant.
-     */
-    Coup calculDistanceRecursive(Etat etat, int floorFin) {
-        String chevrons = "###############################".substring(0, (etat.floor +1)*2);
-        chevrons += etat.floor + ":";
-        logDebug(chevrons, "etat:", etat);
-        
-        List<Coup> coups = getCoups(etat);
-        
-        int dureeLaPlusBasse = 99999;
-        Coup coupSelect = null;
-        int i = 1;
-        for (Coup coup : coups) {
-            logDebug(chevrons, "> coup: (", i, "/", coups.size(), ")", coup);
-            if (etat.floor < floorFin) {
-                Coup coupSuiv = calculDistanceRecursive(coup.etatFinal, floorFin);
-                if (coupSuiv == null) continue;
-                coup.coupSuivant = coupSuiv;
-                coup.duree += coupSuiv.duree;
-                coup.nbClones += coupSuiv.nbClones;
-                logDebug(chevrons, "> nouvelle duree:", coup.duree, "nbClones:", coup.nbClones);
-            }
-            if (coup.duree < dureeLaPlusBasse) {
-                coupSelect = coup;
-                dureeLaPlusBasse = coup.duree;
-            }
-            i++;
-        }
-        logDebug(chevrons, "> meilleur coup:", coupSelect, "duree:", dureeLaPlusBasse);
-
-        return coupSelect;
-    }
-    
-    List<Coup> getCoups(Etat etat) {
-        if (etat.floor == 10 && etat.pos == 23 && etat.nbAdditionalElevators > 1) {
-            log("on y est");
-        }
+            etat.gamePhase = in.next(); // can be MOVE, GIVE_CARD, THROW_CARD, PLAY_CARD or RELEASE
+            System.err.println(etat.gamePhase);
+            
+            int applicationsCount = in.nextInt();
+            System.err.println(""+applicationsCount);
+            
+            for (int i = 0; i < applicationsCount; i++) {
+                Application application = new Application(); 
+                String objectType = in.next();
                 
-        List<Coup> results = new ArrayList<>();
-        List<Elevator> floorElevators = new ArrayList<>();
+                application.id = in.nextInt();
+                
+                String output = " " + application.id;
+                for (int j = 0; j < 8; j++) {
+                    application.tasks[j] = in.nextInt();
+                    output += " " + application.tasks[j];
+                }
+                /*
+                application.id = in.nextInt();
+                application.trainingNeeded = in.nextInt(); // number of TRAINING skills needed to release this application
+                application.codingNeeded = in.nextInt(); // number of CODING skills needed to release this application
+                application.dailyRoutineNeeded = in.nextInt(); // number of DAILY_ROUTINE skills needed to release this application
+                application.taskPrioritizationNeeded = in.nextInt(); // number of TASK_PRIORITIZATION skills needed to release this application
+                application.architectureStudyNeeded = in.nextInt(); // number of ARCHITECTURE_STUDY skills needed to release this application
+                application.continuousDeliveryNeeded = in.nextInt(); // number of CONTINUOUS_DELIVERY skills needed to release this application
+                application.codeReviewNeeded = in.nextInt(); // number of CODE_REVIEW skills needed to release this application
+                application.refactoringNeeded = in.nextInt(); // number of REFACTORING skills needed to release this application
+                */
+                etat.applications.add(application);
+                
+                System.err.println(objectType+output);
+            }
+            
+            for (int i = 0; i < 2; i++) {
+                Joueur joueur = new Joueur(); 
+                
+                joueur.location = in.nextInt(); // id of the zone in which the player is located
+                joueur.score = in.nextInt();
+                joueur.permanentDailyRoutineCards = in.nextInt(); // number of DAILY_ROUTINE the player has played. It allows them to take cards from the adjacent zones
+                joueur.permanentArchitectureStudyCards = in.nextInt(); // number of ARCHITECTURE_STUDY the player has played. It allows them to draw more cards
+                
+                etat.joueurs.add(joueur);
+                
+                System.err.println(""+joueur.location+" "+joueur.score+" "+joueur.permanentDailyRoutineCards+" "+
+                        joueur.permanentArchitectureStudyCards);
+            }
+            
+            int cardLocationsCount = in.nextInt();
+            System.err.println(""+cardLocationsCount);
+            
+            for (int i = 0; i < cardLocationsCount; i++) {
+                int[] cards = new int[10];
+                
+                String location = in.next(); // the location of the card list. It can be HAND, DRAW, DISCARD or OPPONENT_CARDS (AUTOMATED and OPPONENT_AUTOMATED will appear in later leagues)
+                
+                String output = "";
+                for (int j = 0; j < 10; j++) {
+                    cards[j] = in.nextInt();
+                    output += " " + cards[j];
+                }
+                
+                /*
+                cardsLocation.trainingCardsCount = in.nextInt();
+                cardsLocation.codingCardsCount = in.nextInt();
+                cardsLocation.dailyRoutineCardsCount = in.nextInt();
+                cardsLocation.taskPrioritizationCardsCount = in.nextInt();
+                cardsLocation.architectureStudyCardsCount = in.nextInt();
+                cardsLocation.continuousDeliveryCardsCount = in.nextInt();
+                cardsLocation.codeReviewCardsCount = in.nextInt();
+                cardsLocation.refactoringCardsCount = in.nextInt();
+                cardsLocation.bonusCardsCount = in.nextInt();
+                cardsLocation.technicalDebtCardsCount = in.nextInt();
+                */
+                
+                etat.cardsLocations.put(location, cards);
+                
+                System.err.println(location+output);
 
-        Optional<Elevator> elevatorPileDessus = elevators.stream()
-                    .filter(e -> e.floor == etat.floor && e.pos == etat.pos)
-                    .findAny();
-
-        // On peut prendre soit le plus proche ascenseur à droite soit le plus proche à gauche
-        
-        Optional<Elevator> leftElevator = elevators.stream()
-            .filter(e -> e.floor == etat.floor)
-            .filter(e -> e.pos < etat.pos)
-            .reduce((e1, e2) -> e1.pos > e2.pos ? e1 : e2);
-        
-        Optional<Elevator> rightElevator = elevators.stream()
-                .filter(e -> e.floor == etat.floor)
-                .filter(e -> e.pos > etat.pos)
-                .reduce((e1, e2) -> e1.pos < e2.pos ? e1 : e2);
-        
-        if (etat.floor == exitFloor) {
+            }
+            int possibleMovesCount = in.nextInt();
+            System.err.println(""+possibleMovesCount);
+            if (in.hasNextLine()) {
+                in.nextLine();
+            }
             
-            // On est sur l'étage de la sortie
-            // Vérifier que l'on peut l'atteindre
-            
-            // TODO : si on est sur un ascenseur, on ne peut atteindre la sortie que si on
-            // est dans la direction inverse sinon on est aspiré par l'ascenseur
-            // C'est le cas pour le test 08. 
-            
-            if (elevatorPileDessus.isPresent()
-             || (exitPos < etat.pos && leftElevator.isPresent() && leftElevator.get().pos > exitPos)
-             || (exitPos > etat.pos && rightElevator.isPresent() && rightElevator.get().pos < exitPos)) {
-                // La sortie n'est pas atteignable
-                return results;
-            } else {
-                floorElevators.add(new Elevator(exitFloor, exitPos));
+            for (int i = 0; i < possibleMovesCount; i++) {
+                String possibleMove = in.nextLine();
+                System.err.println(possibleMove);
+                etat.possibleMoves.add(possibleMove);
             }
 
-        // Ca ou on est sur un ascenceur : on ne peut en sortir que si on va dans la direction opposée. 
-        } else if (elevatorPileDessus.isPresent()) {
-            floorElevators.add(elevatorPileDessus.get());
-            // Il faut ajouter celui qui est dans le sens oposé
-            if (etat.direction.equals("RIGHT")) {
-                if (leftElevator.isPresent()) floorElevators.add(leftElevator.get());
-            } else {
-                if (rightElevator.isPresent()) floorElevators.add(rightElevator.get());
+            // Write an action using System.out.println()
+            // To debug: System.err.println("Debug messages...");
+
+
+            // In the first league: RANDOM | MOVE <zoneId> | RELEASE <applicationId> | WAIT; In later leagues: | GIVE <cardType> | THROW <cardType> | TRAINING | CODING | DAILY_ROUTINE | TASK_PRIORITIZATION <cardTypeToThrow> <cardTypeToTake> | ARCHITECTURE_STUDY | CONTINUOUS_DELIVERY <cardTypeToAutomate> | CODE_REVIEW | REFACTORING;
+            
+            String ordre = strategie(etat);
+            System.out.println(ordre);
+        }
+    }
+    
+    private String strategie(Etat etat) {
+        logDebug("etat.gamePhase", etat.gamePhase);
+        
+        if (etat.gamePhase.equals("MOVE")) return strategiePourMove(etat);
+        else if (etat.gamePhase.equals("RELEASE")) return strategiePourRelease(etat);
+        else if (etat.gamePhase.equals("GIVE_CARD")) return "RANDOM";
+        return "RANDOM";
+    }
+
+    private String strategiePourMove(Etat etat) {
+        
+        // Rechercher le poste ayant une tâche spécifique nécessaire à une application
+        
+        int meilleureDette = 999;
+        int moveSelect = -1;
+        OrdreRelease ordreSelect = null;
+        
+        CardsTool cardsTool = new CardsTool(etat.cardsLocations.get("HAND"));
+        
+        for (int i = 0; i < 8; i++) {
+            //logDebug("> poste:", i);
+            if (etat.joueurs.get(0).location != i) {
+                
+                int[] newMain = cardsTool.dupplique();
+                newMain[i]++;
+                logDebug("-------- move ", i, "newMain", Arrays.toString(newMain));
+                
+                OrdreRelease ordre = meilleureGiveCard(etat, newMain, i);
+                
+                if (ordre.detteTechnique < meilleureDette) {
+                    moveSelect = i;
+                    meilleureDette = ordre.detteTechnique;
+                    ordreSelect = ordre;
+                }
+
+            }
+        }
+        
+        if (moveSelect > -1) {
+            return "MOVE "+moveSelect + " app("+ordreSelect.id+") dette:"+ordreSelect.detteTechnique; 
+        }
+        return "RANDOM";
+    }
+
+    OrdreRelease meilleureGiveCard(Etat etat, int[] main, int poste) {
+        
+        OrdreRelease ordre = meilleureRelease(etat, main);
+        
+        if (etat.joueurs.get(1).location > -1) {
+            logDebug("proche", poste, etat.joueurs.get(1).location, "=", proche[poste][etat.joueurs.get(1).location]);
+            if (proche[poste][etat.joueurs.get(1).location] == 1) {
+                ordre.detteTechnique += 2;
             }
         } else {
-            // On peut prendre soit le plus proche ascenseur à droite soit le plus proche à gauche
-            if (leftElevator.isPresent()) floorElevators.add(leftElevator.get());
-            if (rightElevator.isPresent()) floorElevators.add(rightElevator.get());
-        }
-            
-        for (Elevator elevator : floorElevators) {
-            
-            Coup coup = new Coup();
-            coup.elevator = elevator;
-            coup.ordre = "WAIT";
-            coup.etatFinal = new Etat(etat.floor+1, elevator.pos, etat.direction);
-
-            coup.duree = Math.abs(etat.pos - elevator.pos);
-            if (etat.floor < exitFloor) coup.duree += 1;
-            
-            if ((etat.pos < elevator.pos && etat.direction.equals("LEFT"))
-                    || (elevator.pos < etat.pos && etat.direction.equals("RIGHT"))) {
-                coup.duree += 3;
-                coup.nbClones++;
-                coup.ordre = "BLOCK";
-                coup.etatFinal.direction = etat.direction.equals("LEFT") ? "RIGHT" : "LEFT";
-            }
-            
-            coup.etatFinal.nbAdditionalElevators = etat.nbAdditionalElevators - coup.nbElevators;
-            coup.etatFinal.nbRounds = etat.nbRounds - coup.duree;
-            coup.etatFinal.nbTotalClones = etat.nbTotalClones - coup.nbClones;
-            
-            if (coup.etatFinal.nbRounds >= 0 && coup.etatFinal.nbTotalClones >= 0
-                    && coup.etatFinal.nbAdditionalElevators >= 0) {
-                results.add(coup);
-            }
+            logDebug("proche", poste, etat.joueurs.get(1).location);
         }
         
-        // Création d'ascenseurs
+        logDebug("Appli selected modif", ordre.id, "dette", ordre.detteTechnique);
         
-        if (etat.floor < exitFloor &&
-                etat.nbAdditionalElevators > 0 && etat.nbRounds > 3 && etat.nbTotalClones > 1) {
-            
-            // Création d'un ascenseur à l'endroit ou on se trouve (s'il n'y en a pas déjà un)
-            
-            if (!elevatorPileDessus.isPresent()) {
-                Etat etatFinal = new Etat(etat.floor+1, etat.pos, etat.direction, etat.nbRounds-3,
-                        etat.nbTotalClones-1, etat.nbAdditionalElevators-1);
-                Elevator elevator = new Elevator(etat.floor, etat.pos);
-                results.add(new Coup(elevator, 3, 1, 1, etatFinal, "ELEVATOR"));
-            }
-            
-            // Création d'un ascenseur sous la sortie (si c'est possible)
-            
-            // Ce n'est pas possible s'il existe un ascenceur avant la colonne de la sortie.
-            
-            // Si on est sur un ascenseur, on ne peut se diriger vers la sortie que si on
-            // est dans la direction inverse sinon on est aspiré par l'ascenseur.
-            
-            boolean leftPossible = exitPos < etat.pos
-                    && (!leftElevator.isPresent() || leftElevator.get().pos < exitPos)
-                    && (!elevatorPileDessus.isPresent() || etat.direction.equals("RIGHT"));
-            boolean rightPossible = exitPos > etat.pos
-                    && (!rightElevator.isPresent() || rightElevator.get().pos > exitPos)
-                    && (!elevatorPileDessus.isPresent() || etat.direction.equals("LEFT"));
-            
-            if (leftPossible || rightPossible) {
-                
-                Coup coup = new Coup();
-                coup.elevator = new Elevator(etat.floor, exitPos);
-                coup.ordre = "WAIT";
-                coup.etatFinal = new Etat(etat.floor+1, exitPos, etat.direction);
+        return ordre;
+    }
 
-                coup.duree = Math.abs(etat.pos - exitPos);
-                if (etat.floor < exitFloor) coup.duree += 1;
-                
-                // Cout de l'ascenseur
-                coup.duree += 3;
-                coup.nbClones++;
-                coup.nbElevators = 1;
-                
-                if ((etat.pos < exitPos && etat.direction.equals("LEFT"))
-                        || (exitPos < etat.pos && etat.direction.equals("RIGHT"))) {
-                    coup.duree += 3;
-                    coup.nbClones++;
-                    coup.ordre = "BLOCK";
-                    coup.etatFinal.direction = etat.direction.equals("LEFT") ? "RIGHT" : "LEFT";
-                }
-                
-                coup.etatFinal.nbAdditionalElevators = etat.nbAdditionalElevators - coup.nbElevators;
-                coup.etatFinal.nbRounds = etat.nbRounds - coup.duree;
-                coup.etatFinal.nbTotalClones = etat.nbTotalClones - coup.nbClones;
-                
-                if (coup.etatFinal.nbRounds >= 0 && coup.etatFinal.nbTotalClones >= 0 && coup.etatFinal.nbAdditionalElevators >= 0) {
-                    results.add(coup);
-                }
+    private String strategiePourRelease(Player.Etat etat) {
+        logDebug("strategiePourRelease");
+        
+        // Recherche meilleure appli à jouer 
+        
+        int[] main = etat.cardsLocations.get("HAND");
+        OrdreRelease ordre = meilleureRelease(etat, main);
 
+        if (ordre.id > -1
+                && ((releaseCount == 4 && ordre.detteTechnique == 0)
+                 || (releaseCount < 4 && ordre.detteTechnique <= 2))) {
+            releaseCount++;
+            logDebug("appliSelected", ordre.id);
+            return "RELEASE "+ordre.id + " dette:"+ordre.detteTechnique;
+        }
+
+        return "WAIT";
+    }
+
+    OrdreRelease meilleureRelease(Etat etat, int[] main) {
+
+        OrdreRelease ordre = new OrdreRelease();
+        
+        CardsTool cardsTool = new CardsTool(main);
+        int cardsTaskCount = cardsTool.getTaskCount();
+        logDebug("hand ", cardsTool, "tasksCount", cardsTaskCount);
+        
+        int meilleureDette = 999;
+        Application appliSelected = null;
+        
+        for (Application application : etat.applications) {
+            logDebug(application);
+            if (cardsTaskCount >= application.getTaskCount()) {
+                int cardsOk = 0;
+            
+                for (int i = 0; i < 8; i++) {
+                    cardsOk += Math.min(application.tasks[i], main[i]);
+                }
+                int dette = application.getTaskCount() - (2 * cardsOk) - main[8];
+                dette = Math.max(dette,  0);
+                logDebug(" > cardsOk", cardsOk, "dette", dette);
+                
+                if (dette < meilleureDette) {
+                    appliSelected = application;
+                    meilleureDette = dette;
+                }
             }
         }
 
-        return results;        
+        if (appliSelected != null) {
+            ordre.id = appliSelected.id;
+            ordre.detteTechnique = meilleureDette;
+            logDebug("Appli selected", appliSelected.id, "dette", meilleureDette);
+        }
+        return ordre;
         
     }
     
-    class Elevator {
-        int floor;
-        int pos;
+    //-----------------------------------------------------------------------------
+    
+    class Etat {
+        String gamePhase;
+        List<Application> applications = new ArrayList<>();
+        List<Joueur> joueurs = new ArrayList<>(2);
+
+        // the location of the card list. It can be HAND, DRAW, DISCARD
+        //or OPPONENT_CARDS (AUTOMATED and OPPONENT_AUTOMATED will appear in later leagues)
+        Map<String, int[]> cardsLocations = new HashMap<>();
         
-        public Elevator(int floor, int pos) {
-            super();
-            this.floor = floor;
-            this.pos = pos;
+        List<String> possibleMoves = new ArrayList<>();
+    }
+
+    class OrdreRelease {
+        int id = -1;
+        int detteTechnique = 0;
+    }
+    
+    class Application {
+        int id;
+        int[] tasks = new int[8];
+        
+        int getTaskCount() {
+            return IntStream.of(tasks).sum();
         }
         
         @Override
         public String toString() {
-            return "Elevator [floor=" + floor + ", pos=" + pos + "]";
+            return "Appli [id=" + id + ", tasks=" + Arrays.toString(tasks) + "]";
         }
-    }
-    
-    class Etat extends Elevator {
-       String direction;
-       int nbRounds;
-       int nbTotalClones;
-       int nbAdditionalElevators;
-       
-       public Etat(int floor, int pos, String direction) {
-           super(floor, pos);
-           this.direction = direction;
-       }
-       
-       public Etat(int floor, int pos, String direction, int nbRounds, int nbTotalClones, int nbAdditionalElevators) {
-           super(floor, pos);
-           this.direction = direction;
-           this.nbRounds = nbRounds;
-           this.nbTotalClones = nbTotalClones;
-           this.nbAdditionalElevators = nbAdditionalElevators;
-       }
-       
-       @Override
-       public String toString() {
-           return "Etat [floor=" + floor + ", pos=" + pos + ", direction=" + direction + ", nbRounds=" + nbRounds
-                   + ", nbTotalClones=" + nbTotalClones + ", nbAddElevators=" + nbAdditionalElevators + "]";
-       }
-    }
-    
-    class Coup {
-        int duree = 0;
-        int nbClones = 0;
-        int nbElevators = 0;
-        Etat etatFinal;
-        String ordre;
-        Coup coupSuivant = null;
-        Elevator elevator;
         
-        public Coup() {
+    }
+    
+    class Joueur {
+        int location; // id of the zone in which the player is located
+        int score;
+        int permanentDailyRoutineCards; // number of DAILY_ROUTINE the player has played. It allows them to take cards from the adjacent zones
+        int permanentArchitectureStudyCards; // number of ARCHITECTURE_STUDY the player has played. It allows them to draw more cards
+    }
+  
+    class CardsTool { 
+        int[] cards = new int[10];
+
+        public CardsTool(int[] cards) {
             super();
-        }
-       
-        public Coup(Elevator elevator, int duree, int nbClones, int nbElevators, Player.Etat etatFinal, String ordre) {
-            super();
-            this.elevator = elevator;
-            this.duree = duree;
-            this.nbClones = nbClones;
-            this.nbElevators = nbElevators;
-            this.etatFinal = etatFinal;
-            this.ordre = ordre;
+            this.cards = cards;
         }
 
+        int getTaskCount() {
+            int count = 0;
+            for (int i = 0; i < 8; i++) {
+                count += cards[i] * 4; 
+            }
+            count += cards[8] * 2;
+            return count;
+        }
+        
+        int[] dupplique() {
+            int[] newCards = new int[10];
+            for (int i = 0; i < newCards.length; i++) {
+                newCards[i] = cards[i]; 
+            }
+            return newCards;
+        }
+        
         @Override
         public String toString() {
-            return "Coup [" + elevator + ", duree=" + duree + ", nbClones=" + nbClones + ", nbElevators="
-                    + nbElevators + ", etatFinal="
-                    + etatFinal + ", ordre=" + ordre + "]";
+            return "Cards [cards=" + Arrays.toString(cards) + "]";
         }
-                
+        
     }
 
     /* Codingame common */
 
+    static boolean doLog = true;
     static boolean doLogDebug = false;
+    static String[] logFilters = null;
     
     static void log(Object... objects) {
         if (doLog) {
@@ -435,6 +345,7 @@ class Player {
     static void activateLog() {
         doLog = true;
     }
+    
     
     static void logDebug(Object... objects) {
         if (doLogDebug) {
@@ -457,5 +368,5 @@ class Player {
     static void activateLogDebug() {
         doLogDebug = true;
     }
-    
+
 }

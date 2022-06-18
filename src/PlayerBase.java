@@ -21,6 +21,7 @@ public class PlayerBase {
 
     static boolean doLog = true;
     static boolean doLogDebug = false;
+    static String[] logFilters = null;
     
     static void log(Object... objects) {
         if (doLog) {
@@ -35,13 +36,22 @@ public class PlayerBase {
         doLog = true;
     }
     
+    
     static void logDebug(Object... objects) {
         if (doLogDebug) {
-            System.err.print("*");
+            StringBuilder sb = new StringBuilder();
             for (Object o : objects) {
-                System.err.print("" + o + " ");
+                sb.append("" + o + " ");
             }
-            System.err.println();
+            String logText = sb.toString();
+            if (logFilters != null) {
+                boolean select = false;
+                for (String filter : logFilters) {
+                    if (logText.indexOf(filter) > -1) select = true; 
+                }
+                if (!select) return;
+            }
+            System.err.println("* "+logText);
         }
     }
     
