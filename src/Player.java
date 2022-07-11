@@ -3,24 +3,39 @@ import java.util.stream.IntStream;
 import java.io.*;
 
 /**
- * Complete the hackathon before your opponent by following the principles of Green IT
+ * Principe : Brut Force combinatoire et ajout d'un calcul de score de la position statégique.
  **/
 class Player {
+    private static final int NB_TACHES = 8;
     private static final int MAX_DETTE = 99;
     private static final int INFAISABLE = 99;
 
     private static final int MAX_AJOUT_DETTE_CAS_NORMAL = 2;
     private static final int MAX_AJOUT_DETTE_SI_RETARD = 4;
+    private static final boolean OPT_FUSION_PIOCHE_ET_DEFAUSSE = true;
 
+    // TODO2 : Faire un système de time out
+    
     String commande;
     Ordre planEnCours = null;
     Deplacement deplEnCours = null;
     
     // --- Stats sur les cartes
+    
+    // Cartes demandées par les applications restantes
     Cards cartesDemandees;
     boolean[] cartesUtiles;
     Cards prochaineCarte;
     Cards cartesManquantes;
+    Map<Integer, ArrayList<Cards>> combinaisonsApplis;
+    
+    // Stats algorithme
+    long cptAnaRelease = 0;
+    
+    // Gestion time out
+    long TIME_OUT = 45;
+    boolean hasTimedOut;
+    long timeStart; 
     
     public static void main(String args[]) {
         Player player = new Player();
@@ -119,6 +134,22 @@ class Player {
                 }
 
             }
+            
+            etat.pioche = new Cards();
+            if (etat.cardsLocations.get("DRAW") != null) {
+                etat.pioche = etat.cardsLocations.get("DRAW");
+            }
+
+            etat.defausse = new Cards();
+            if (etat.cardsLocations.get("DISCARD") != null) {
+                etat.defausse = etat.cardsLocations.get("DISCARD");
+            }
+
+            etat.automated = new Cards();
+            if (etat.cardsLocations.get("AUTOMATED") != null) {
+                etat.automated = etat.cardsLocations.get("AUTOMATED");
+            }
+            
             int possibleMovesCount = in.nextInt();
             System.err.println(""+possibleMovesCount);
             if (in.hasNextLine()) {
@@ -130,15 +161,16 @@ class Player {
                 System.err.println(possibleMove);
                 etat.actionsPossibles.add(possibleMove);
             }
-
-            // Write an action using System.out.println()
-            // To debug: System.err.println("Debug messages...");
-
-
-            // In the first league: RANDOM | MOVE <zoneId> | RELEASE <applicationId> | WAIT; In later leagues: | GIVE <cardType> | THROW <cardType> | TRAINING | CODING | DAILY_ROUTINE | TASK_PRIORITIZATION <cardTypeToThrow> <cardTypeToTake> | ARCHITECTURE_STUDY | CONTINUOUS_DELIVERY <cardTypeToAutomate> | CODE_REVIEW | REFACTORING;
-            
+           
             commande = null;
+            timeStart = System.nanoTime();
+            hasTimedOut = false;
+            cptAnaRelease = 0;
+            
             strategie(etat);
+            
+            System.err.println("Duree: "+Math.floorDiv(System.nanoTime()-timeStart, 1_000_000)+"ms "
+                    + ", cptAnaRelease: " +cptAnaRelease + (hasTimedOut ? " hasTimedOut" : ""));
             System.out.println(commande);
         }
     }
@@ -150,6 +182,8 @@ class Player {
         statsCartes(etat);
         statsJoueurs(etat);
         ajoutDeplacements(etat);
+        calculCombinaisonsApplis(etat);
+        //calculProbaApplicationSuivante(etat);
         
         applicationDuPlanEnCours(etat);
         if (commande != null) return;
@@ -157,9 +191,9 @@ class Player {
         if (etat.gamePhase.equals("MOVE")) {
             strategieRechercheReleaseParLaCombinatoire(etat);
             // Capture CONTINUOUS_INTEGRATION
-            strategieCaptureCarte(etat, 5);
+            //strategieCaptureCarte(etat, 5);
             //// Capture Daily routine
-            if (etat.moi.permanentDailyRoutineCards == 0) strategieCaptureCarte(etat, 2);
+            //if (etat.moi.permanentDailyRoutineCards == 0) strategieCaptureCarte(etat, 2);
             strategieRechercheCartesManquantes(etat);
             strategieMovePourAvoirUneCarte(etat);
             strategieMoveSurSuivant(etat);
@@ -212,7 +246,8 @@ class Player {
             }
         }
         // La continuous integration est toujours utile
-        cartesUtiles[5] = true;
+        // TODO : à revoir ?
+        // cartesUtiles[5] = true;
         log("cartesUtiles", Arrays.toString(cartesUtiles));
         
         Cards cartesEnMain = new Cards();
@@ -235,6 +270,7 @@ class Player {
         }
         log("prochaineCarte", prochaineCarte);
         
+        // TODO : ya -t-il encore un intérêt ?
         // ---- Détermination cartes prirotaires
         
         Cards cartesEnMaMain = new Cards();
@@ -278,9 +314,9 @@ class Player {
         log("dette: moi", etat.moi.dette, "adv", etat.adv.dette);
     }
 
-    private void ajoutDeplacements(Player.Etat etat) {
+    private void ajoutDeplacements(Etat etat) {
         
-        for (int i = 1; i < 8; i++) {
+        for (int i = 1; i < 9; i++) {
             int poste = addPoste(etat.moi.location, i);
             logDebug("$ deplacement poste", poste);
             
@@ -302,6 +338,193 @@ class Player {
         
     }
 
+    private void calculCombinaisonsApplis(Etat etat) {
+        if (combinaisonsApplis != null) return;
+        combinaisonsApplis = new HashMap<>();
+        
+        etat.applications.forEach(appli -> {
+            logDebug("% appli", appli);
+            ArrayList<Cards> combinaisons = new ArrayList<>();
+            combinaisonsApplis.put(appli.id, combinaisons);
+            
+            Cards main = new Cards();
+            for (int i = 0; i < 8; i++) {
+                main.c[i] = appli.tasks.c[i] / 2;
+            }
+            combinaisons.add(main);
+            logDebug("% +", main);
+            
+            // Combinaisons en remplaçant une carte compétence par 2 cartes bonus
+            
+            for (int i = 0; i < 8; i++) {
+                if (main.c[i] > 0) {
+                    Cards nouvMain = main.duplique();
+                    nouvMain.c[i]--;
+                    nouvMain.c[BON] += 2;
+                    combinaisons.add(nouvMain);
+                    
+                    logDebug("% +", nouvMain);
+                }
+            }
+            
+            // Combinaisons en remplaçant 2 cartes compétences identiques par 4 cartes bonus
+            
+            for (int i = 0; i < 8; i++) {
+                if (main.c[i] > 0) {
+                    Cards nouvMain = main.duplique();
+                    nouvMain.c[i] -= 2;
+                    nouvMain.c[BON] += 4;
+                    combinaisons.add(nouvMain);
+                    
+                    logDebug("% +", nouvMain);
+                }
+            }
+            
+            // Combinaisons en remplaçant 1 carte de chaque compétence par 4 cartes bonus
+            
+            Cards nouvMain = main.duplique();
+            nouvMain.c[BON] += 4;
+            
+            for (int i = 0; i < 8; i++) {
+                if (main.c[i] > 0) {
+                    nouvMain.c[i]--;
+                }
+            }
+            combinaisons.add(nouvMain);
+            logDebug("% +", nouvMain);
+            
+        }); 
+    }
+
+    Ordre calculProbaApplicationSuivante(Etat etat) {
+        
+        logDebug("~", "calculProbaApplicationSuivante", etat);
+        
+        LinkedList<Double>[] probasParCartes = new LinkedList[9];
+        for (int i = 0; i < 9; i++) {
+            probasParCartes[i] = new LinkedList<>();
+        }
+        
+        // Ajout cartes sur la table
+        // TODO : Pas sur de ce coup la si on boucle par l'admin ...
+        // TODO : Prendre en compte le permanent daily routine
+        // TODO : on vient peut être de prendre la carte ...
+        //for (int i = etat.moi.location + 1; i < 8; i++) {
+        for (int i = 0; i < 8; i++) {
+            if (prochaineCarte.c[i] == i) {
+                probasParCartes[i].add(1D);
+                logDebug("~", "Ajout carte sur la table", i);
+            }
+        }
+        
+        // Ajout cartes en automated
+        for (int i = 0; i < 9; i++) {
+            for (int j = 0; j < etat.automated.c[i]; j++) {
+                probasParCartes[i].add(1D);
+                logDebug("~", "Ajout carte automated", i);
+            }
+        }
+        
+        int tailleMain = 4 + etat.moi.permanentArchitectureStudyCards;
+        
+        if (OPT_FUSION_PIOCHE_ET_DEFAUSSE) {
+            Cards fusion = etat.pioche.duplique().ajoute(etat.defausse).ajoute(etat.main);
+            int cpt = fusion.getCount();
+            logDebug("~", "fusion", fusion, cpt);
+            
+            for (int i = 0; i < 9; i++) {
+                for (int j = fusion.c[i]; j > 0; j--) {
+                    // TODO : pas vrai : s'il y a n cartes, il y a n fois plus de chance d'en avoir une
+                    double proba = Math.min((double) tailleMain / cpt, 1D);
+                    probasParCartes[i].add(proba);
+                    logDebug("~", "Ajout carte fusion", i, proba);
+                }
+            }
+           
+        } else {
+            
+            // Ajout cartes en pioche
+            
+            int cptPioche = etat.pioche.getCount();
+            
+            for (int i = 0; i < 9; i++) {
+                for (int j = etat.pioche.c[i]; j > 0; j--) {
+                    // TODO : pas vrai : s'il y a n cartes, il y a n fois plus de chance d'en avoir une
+                    double proba = Math.min((double) tailleMain / cptPioche, 1D);
+                    probasParCartes[i].add(proba);
+                    logDebug("~", "Ajout carte pioche", i, proba);
+                }
+            }
+            
+            // Ajout cartes en défausse
+            
+            if (cptPioche < tailleMain) {
+                Cards defausseReelle = etat.defausse.duplique().ajoute(etat.main);
+                logDebug("~", "defausseReelle", defausseReelle);
+                
+                int cptDefausse = defausseReelle.getCount();
+                logDebug("~", "cptDefausse", cptDefausse);
+                int cptDefaussePrise = tailleMain - cptPioche;
+                logDebug("~", "defausse prises", cptDefaussePrise);
+                
+                for (int i = 0; i < 9; i++) {
+                    for (int j = 0; j < defausseReelle.c[i]; j++) {
+                        // TODO : pas vrai : s'il y a 2 cartes, il y a 2 fois plus de chance d'en avoir une
+                        probasParCartes[i].add((double) cptDefaussePrise / cptDefausse);
+                        logDebug("~", "Ajout carte defausse", i);
+                    }
+                }
+            }
+        }
+
+        // On remplit par des probas nulles
+        for (int i = 0; i < 9; i++) {
+            for (int j = 0; j < 8; j++) {
+                probasParCartes[i].add(0D);
+            }
+            logDebug("~", "Probas carte", i, "=", probasParCartes[i]);
+        }
+
+        // ----- Balayage des applications
+        
+        double meilleureProba = 0D;
+        int meilleureAppli = -1;
+        
+        for (Application application : etat.applications) {
+            logDebug("~", "---- appli", application.id);
+            double meilleureProbaAppli = 0D;
+            
+            for (Cards cards : combinaisonsApplis.get(application.id)) {
+                double proba = 0D;
+                int cpt = cards.getCount();
+                
+                for (int i = 0; i < 9; i++) {
+                    for (int j = 0; j < cards.c[i]; j++) {
+                        proba += probasParCartes[i].get(j) / cpt; 
+                    }
+                }
+                logDebug("~", "combi", cards, "proba", proba);
+                meilleureProbaAppli = Math.max(meilleureProbaAppli, proba);
+            }
+
+            logDebug("~", "meilleur proba de l'appli", meilleureProbaAppli);
+            
+            if (meilleureProbaAppli > meilleureProba) {
+                meilleureProba = meilleureProbaAppli;
+                meilleureAppli = application.id;
+            }
+            
+        }
+        
+        logDebug("~", "meilleure proba : appli", meilleureAppli, "proba", meilleureProba);
+        
+        Ordre ordreSelect = new Ordre();
+        ordreSelect.appliSuivId = meilleureAppli;
+        ordreSelect.probaAppliSuiv = meilleureProba;
+            
+        return ordreSelect;
+    }
+    
     void applicationDuPlanEnCours(Etat etat) {
         if (etat.gamePhase.equals("MOVE") || planEnCours == null) {
             return;
@@ -317,14 +540,21 @@ class Player {
             commande = "GIVE " + planEnCours.giveCard + " plan";
         
         } else if (etat.gamePhase.equals("PLAY_CARD")) {
-            if (planEnCours.prio[0] > -1) {
-                commande = "TASK_PRIORITIZATION "+planEnCours.prio[0]+" "+planEnCours.prio[1] + " plan";
+            if (planEnCours.playCard[0] > -1) {
+                commande = titreCartes[planEnCours.playCard[0]];
+                if (planEnCours.playCard[1] > -1) commande += " " + planEnCours.playCard[1];
+                if (planEnCours.playCard[2] > -1) commande += " " + planEnCours.playCard[2];
+                commande += " plan";
             } else {
                 commande = "WAIT plan";
             }
     
         } else if (etat.gamePhase.equals("RELEASE")) {
-            commande = "RELEASE "+planEnCours.id + " dette:"+planEnCours.dette + " plan";
+            if (planEnCours.idAppli > -1) {
+                commande = "RELEASE "+planEnCours.idAppli + " dette:"+planEnCours.dette + " plan";
+            } else {
+                commande = "WAIT plan";
+            }
         }
         
     }
@@ -332,30 +562,44 @@ class Player {
     private void strategieRechercheReleaseParLaCombinatoire(Etat etat) {
     
         planEnCours = null;
-        Ordre ordreSelect = meuilleurMoveCombinatoire(etat);
+        Ordre ordreSelect = meilleurMoveCombinatoire(etat);
 
         log("Meilleur ordre par combinatoire", ordreSelect);
         
         if (ordreSelect != null) {
-            
-            logDebug("A", (etat.moi.score == 4 && ordreSelect.dette == 0));
-            logDebug("B", (etat.moi.score < 4));
-            logDebug("C", (ordreSelect.dette <= 2));
-            logDebug("D", (etat.moi.score < etat.adv.score && etat.moi.dette + ordreSelect.dette <= etat.adv.dette));
-            logDebug("A ou (B et (C ou D))");
-            
-            if ( ((etat.moi.score == 4 && ordreSelect.dette == 0)
-                 || (etat.moi.score < 4
-                         && (ordreSelect.dette <= MAX_AJOUT_DETTE_CAS_NORMAL
-                             || (ordreSelect.dette <= MAX_AJOUT_DETTE_SI_RETARD && etat.moi.score < etat.adv.score && etat.moi.dette + ordreSelect.dette < etat.adv.dette))))) {
-
-                commande = "MOVE "+ordreSelect.depl.poste + " "+ordreSelect.depl.carte + " app("+ordreSelect.id+") dette:"+ordreSelect.dette;
+            if (detteAcceptable(etat, ordreSelect.dette)) {
+                commande = "MOVE "+ordreSelect.depl.poste + " "+ordreSelect.depl.carte + " app("+ordreSelect.idAppli+") dette:"+ordreSelect.dette;
                 planEnCours = ordreSelect;
                 deplEnCours = ordreSelect.depl;
                 log("Plan a venir", planEnCours);
+            } else {
+                commande = "MOVE "+ordreSelect.depl.poste + " "+ordreSelect.depl.carte + " proba: "+ordreSelect.probaAppliSuiv+" appli:"+ordreSelect.appliSuivId;
             }
         }
 
+    }
+
+    /**
+     * Détermine si la dette générée est acceptable.
+     */
+    
+    boolean detteAcceptable(Etat etat, int detteOrdre) {
+        
+        logDebug("A", (etat.moi.score == 4 && detteOrdre == 0));
+        logDebug("B", (etat.moi.score < 4));
+        logDebug("C", (detteOrdre <= 2));
+        logDebug("D", (etat.moi.score < etat.adv.score && etat.moi.dette + detteOrdre <= etat.adv.dette));
+        logDebug("A ou (B et (C ou D))");
+
+        if ( ((etat.moi.score == 4 && detteOrdre == 0)
+            || (etat.moi.score < 4
+                    && (detteOrdre <= MAX_AJOUT_DETTE_CAS_NORMAL
+                        || (detteOrdre <= MAX_AJOUT_DETTE_SI_RETARD
+                                && etat.moi.score < etat.adv.score
+                                && etat.moi.dette + detteOrdre < etat.adv.dette))))) {
+            return true;
+        }
+        return false;
     }
 
     private void strategieRechercheCartesManquantes(Player.Etat etat) {
@@ -451,7 +695,7 @@ class Player {
     private void strategieGiveCardCombinatoire(Etat etat) {
         if (commande != null) return;
         
-        Ordre ordre = meilleurGiveCardCombinatoire(etat, etat.cardsLocations.get("HAND"), deplEnCours);
+        Ordre ordre = meilleurGiveCardCombinatoire(etat, deplEnCours);
         commande = "GIVE " + ordre.giveCard;
 
     }
@@ -596,180 +840,214 @@ class Player {
         
         // Recherche meilleure appli à jouer 
         
-        Cards main = etat.cardsLocations.get("HAND");
-        Ordre ordreRelease = meilleureRelease(etat, main);
+        Ordre ordreRelease = meilleureRelease(etat);
 
         logDebug("ordreRelease", ordreRelease);
         
-        logDebug("0", (ordreRelease.id > -1));
-        logDebug("A", (etat.moi.score == 4 && ordreRelease.dette == 0));
-        logDebug("B", (etat.moi.score < 4));
-        logDebug("C", (ordreRelease.dette <= 2));
-        logDebug("D", (etat.moi.score < etat.adv.score && etat.moi.dette < etat.adv.dette));
-        logDebug("A ou (B et (C ou D))");
-        
-        if (ordreRelease.id > -1
-                && ((etat.moi.score == 4 && ordreRelease.dette == 0)
-                 || (etat.moi.score < 4
-                         && (ordreRelease.dette <= MAX_AJOUT_DETTE_CAS_NORMAL
-                             || (ordreRelease.dette <= MAX_AJOUT_DETTE_SI_RETARD && etat.moi.score < etat.adv.score && etat.moi.dette + ordreRelease.dette < etat.adv.dette))))) {
-            logDebug("appliSelected", ordreRelease.id);
-            commande = "RELEASE "+ordreRelease.id + " dette:"+ordreRelease.dette;
+        if (ordreRelease.idAppli > -1 && detteAcceptable(etat, ordreRelease.dette)) {
+            logDebug("appliSelected", ordreRelease.idAppli);
+            commande = "RELEASE "+ordreRelease.idAppli + " dette:"+ordreRelease.dette;
         }
         doLogDebug = prevDoLogDebug;
 
     }
 
-    Ordre meuilleurMoveCombinatoire(Etat etat) {
+    Ordre meilleurMoveCombinatoire(Etat etat) {
         String chevrons = "#1:";
          
-        int meilleurDette = MAX_DETTE;
         Ordre ordreSelect = null;
         
         for (Deplacement depl : etat.deplacements) {
-                 
-            logDebug(chevrons, "-------- move ", depl, "prochaineCarte", prochaineCarte.c[depl.carte], etat.main);
-            
-            Ordre ordre = meilleurThrowCardCombinatoire(etat, etat.main, depl);
-                    
-            if (ordre.dette < meilleurDette || meilleurDette == MAX_DETTE) {
-                meilleurDette = ordre.dette;
-                ordreSelect = ordre;
-                ordreSelect.depl = depl;
+            long duration = Math.floorDiv(System.nanoTime()-timeStart, 1_000_000);
+            if (duration > TIME_OUT) {
+                hasTimedOut = true;
+                break;
             }
-
+            
+            logDebug(chevrons, "{ -------- move ", depl, "prochaineCarte", prochaineCarte.c[depl.carte], etat.main);
+            
+            Ordre ordre = meilleurThrowCardCombinatoire(etat, depl);
+            ordre.depl = depl;
+            
+            ordreSelect = choixMeilleurOrdre(ordre, ordreSelect);
+            logDebug(chevrons, "}", "ordreSelect", ordreSelect);
         }
         
         logDebug(chevrons, "meilleurOrdre", ordreSelect);
         return ordreSelect;
     }
     
-    Ordre meilleurThrowCardCombinatoire(Etat etat, Cards main, Deplacement depl) {
+    Ordre meilleurThrowCardCombinatoire(Etat etat, Deplacement depl) {
         String chevrons = "##2:";
         
-        Ordre meilleurOrdre = null;
-        
+        Ordre ordreSelect = null;
+                
         if (depl.throwCard) {
-            logDebug(chevrons, "passageAdmin ++", depl.poste, "<", etat.moi.location);
+            logDebug(chevrons, "{ passageAdmin ++", depl.poste, "<", etat.moi.location);
 
-            List<int[]> combinaisons = combinaison2Cartes(main);
-            
-            int meilleureDette = MAX_DETTE;
+            List<int[]> combinaisons = combinaison2Cartes(etat.main);
             
             for (int[] throwCards : combinaisons) {
+
+                if (throwCards[0] > -1) etat.main.c[throwCards[0]]--; else etat.defausse.c[DET] += 2;
+                if (throwCards[1] > -1) etat.main.c[throwCards[1]]--; else etat.defausse.c[DET] += 2;
                 
-                Cards nouvMain = main.duplique();
-                if (throwCards[0] > -1) nouvMain.c[throwCards[0]]--;
-                if (throwCards[1] > -1) nouvMain.c[throwCards[1]]--;
-                
-                logDebug(chevrons, "throw cards", Arrays.toString(throwCards), "main", main, "nouvMain", nouvMain);
+                logDebug(chevrons, "throw cards", Arrays.toString(throwCards), "sauveMain", etat.main, "nouvMain", etat.main);
                
-                Ordre ordre = meilleurGiveCardCombinatoire(etat, nouvMain, depl);
+                Ordre ordre = meilleurGiveCardCombinatoire(etat, depl);
+                ordre.throwCards = throwCards;
                 
-                if (ordre.dette < meilleureDette || meilleureDette == MAX_DETTE) {
-                    meilleureDette = ordre.dette;
-                    meilleurOrdre = ordre;
-                    meilleurOrdre.throwCards = throwCards;
-                }
-                
+                if (throwCards[0] > -1) etat.main.c[throwCards[0]]++; else etat.defausse.c[DET] -= 2;
+                if (throwCards[1] > -1) etat.main.c[throwCards[1]]++; else etat.defausse.c[DET] -= 2;
+
+                ordreSelect = choixMeilleurOrdre(ordre, ordreSelect);
             }
 
         } else {
-            logDebug(chevrons, "pas passageAdmin", depl.poste, ">=", etat.moi.location);
             
-            meilleurOrdre = meilleurGiveCardCombinatoire(etat, main, depl);
+            logDebug(chevrons, "{ pas passageAdmin", depl.poste, ">=", etat.moi.location);
+            ordreSelect = meilleurGiveCardCombinatoire(etat, depl);
 
         }
        
-        logDebug(chevrons, "meilleurOrdre", meilleurOrdre);
-        return meilleurOrdre;
+        logDebug(chevrons, "} meilleurOrdre", ordreSelect);
+        return ordreSelect;
     }
 
-    Ordre meilleurGiveCardCombinatoire(Etat etat, Cards main, Deplacement depl) {
+    Ordre meilleurGiveCardCombinatoire(Etat etat, Deplacement depl) {
         String chevrons = "###3:";
-        Ordre meilleurOrdre = null;
+        Ordre ordreSelect = null;
         
         if (depl.giveCard) {
             
-            logDebug(chevrons, "proche");
-            
-            int meilleureDette = MAX_DETTE;
+            logDebug(chevrons, "{ proche");
             
             boolean auMoinsUneCarte = false;
             for (int i = 0; i < 9; i++) {
-                if (main.c[i] > 0) {
+                if (etat.main.c[i] > 0) {
                     logDebug(chevrons, "GiveCard", i);
                     auMoinsUneCarte = true;
-                    main.c[i]--;
-                    Ordre ordre = receptionCarte(etat, main, depl);
-                    main.c[i]++;
-                    if (ordre.dette < meilleureDette || meilleureDette == MAX_DETTE) {
-                        meilleureDette = ordre.dette;
-                        meilleurOrdre = ordre;
-                        meilleurOrdre.giveCard = i;
-                    }
+                    etat.main.c[i]--;
+                    
+                    Ordre ordre = jouerDeplacementEtReceptionCarte(etat, depl);
+                    ordre.giveCard = i;
+                    
+                    etat.main.c[i]++;
+                    
+                    ordreSelect = choixMeilleurOrdre(ordre, ordreSelect);
                 }
             }
             if (!auMoinsUneCarte) {
+                // TODO : ajouter 2 dettes dans la défausse
                 logDebug(chevrons, "pas carte = dette -2");
-                meilleurOrdre = receptionCarte(etat, main, depl);
-                //meilleurOrdre.dette += 2;
+                            
+                etat.defausse.c[DET] -= 2;
+                ordreSelect = jouerDeplacementEtReceptionCarte(etat, depl);
+                etat.defausse.c[DET] += 2;
             }
             
         } else {
-            logDebug(chevrons, "pas proche");
-            meilleurOrdre = receptionCarte(etat, main, depl);
+            logDebug(chevrons, "{ pas proche");
+            ordreSelect = jouerDeplacementEtReceptionCarte(etat, depl);
         }
          
-        logDebug(chevrons, "GiveCard select", meilleurOrdre.giveCard, "Appli selected", meilleurOrdre.id, "dette", meilleurOrdre.dette);
+        logDebug(chevrons, "} GiveCard select", ordreSelect.giveCard, "Appli selected", ordreSelect.idAppli, "dette", ordreSelect.dette);
         
-        return meilleurOrdre;
+        return ordreSelect;
     }
 
-    Ordre receptionCarte(Etat etat, Cards main, Deplacement depl) {
+    Ordre jouerDeplacementEtReceptionCarte(Etat etat, Deplacement depl) {
         String chevrons = "####4:";
-        Cards nouvelleMain = main.duplique();
-        nouvelleMain.c[prochaineCarte.c[depl.carte]]++;
-        logDebug(chevrons, "Reception carte", depl.carte, "mainOrigine", main, "nouvelleMain", nouvelleMain);
+
+        etat.main.c[prochaineCarte.c[depl.carte]]++;
+        int sauvLocation = etat.moi.location;
+        etat.moi.location = depl.poste;
         
-        return combinatoireTaskPriorisation(etat, nouvelleMain);
+        logDebug(chevrons, "Reception carte", depl.carte, "main", etat.main);
+        
+        Ordre ordre = meilleurPlayCardCombinatoire(etat);
+        
+        etat.main.c[prochaineCarte.c[depl.carte]]--;
+        etat.moi.location = sauvLocation;
+        
+        return ordre;
     }
 
-    Ordre combinatoireTaskPriorisation(Etat etat, Cards main) {
+    Ordre meilleurPlayCardCombinatoire(Etat etat) {
         String chevrons = "#####5:";
         
-        logDebug(chevrons, "Check sans priorisation");
-        Ordre meilleurOrdre = meilleureRelease(etat, main);
+        logDebug(chevrons, "{ Valorisation sans play card");
+        Ordre ordreSelect = meilleureRelease(etat);
+
+        // Priorisation des tâches TASK_PRIORITIZATION (3). L’équipe se débarrasse d’une carte
+        // compétence de sa main et récupère une carte compétence disponible sur le plateau de jeu.
         
-        if (main.c[PRI] > 0) {
+        if (etat.main.c[PRI] > 0) {
             logDebug(chevrons, "TaskPriorisation");
-            List<int[]> priorisations = listePriorisations(main);
+            List<int[]> priorisations = listePriorisations(etat.main);
             
             for (int[] prio : priorisations) {
                 
-                Cards nouvelleMain = main.duplique();
-                nouvelleMain.c[prio[0]]--;
-                nouvelleMain.c[prio[1]]++;
+                etat.main.c[PRI]--;
+                etat.main.c[prio[0]]--;
+                etat.main.c[prio[1]]++;
                 
-                logDebug(chevrons, "> prio", Arrays.toString(prio), "nouvelleMain", nouvelleMain);
+                logDebug(chevrons, "> prio", Arrays.toString(prio), "nouvelleMain", etat.main);
                 
-                Ordre ordre = meilleureRelease(etat, nouvelleMain);
+                Ordre ordre = meilleureRelease(etat);
+                ordre.playCard = new int[] {PRI, prio[0], prio[1]};
                 
-                if (ordre.dette < meilleurOrdre.dette) {
-                    meilleurOrdre = ordre;
-                    meilleurOrdre.prio = prio;
+                etat.main.c[PRI]++;
+                etat.main.c[prio[0]]++;
+                etat.main.c[prio[1]]--;
+                
+                ordreSelect = choixMeilleurOrdre(ordre, ordreSelect);
+            }
+        }   
+          
+        // CONTINUOUS_INTEGRATION (5) : L’équipe automatise une de ses compétences.
+        
+        if (etat.main.c[CI] > 0) {
+            for (int i = 0; i < 9; i++) {
+                if (etat.main.c[i] > 0 && (i != 5 || etat.main.c[5] > 1)) {
+                    
+                    etat.main.c[CI]--;
+                    etat.automated.c[i]++; 
+                    
+                    logDebug(chevrons, "> automated", i, "nouvelleMain", etat.main);
+                    
+                    Ordre ordre = meilleureRelease(etat);
+                    ordre.playCard = new int[] {CI, i, -1};
+                    
+                    etat.main.c[CI]++;
+                    etat.automated.c[i]--;
+                    
+                    ordreSelect = choixMeilleurOrdre(ordre, ordreSelect);
                 }
             }
-            logDebug(chevrons, "meilleurOrdre", meilleurOrdre);
-        
-        } else {
-            logDebug(chevrons, "No TaskPriorisation");
         }
-
-        return meilleurOrdre;
+            
+        /*
+        // DAILY_ROUTINE (2) : Cette compétence est permanente : une fois jouée, elle reste active
+        // jusqu’à ce que l’équipe ait livré une application.
+        // Après son déplacement, l’équipe pourra récupérer une carte compétence d’un poste de travail
+        // éloigné de 1. L’effet peut être cumulatif.
+        if (main.c[2] > 0
+                && (cartesDemandees.c[2] == 0 || etat.moi.permanentDailyRoutineCards == 0)) {
+            commande = "DAILY_ROUTINE";
+            return;
+        }            
+        */
+        
+        logDebug(chevrons, "} meilleurOrdre", ordreSelect);
+        return ordreSelect;
     }
 
-    private List<int[]> listePriorisations(Player.Cards main) {
+    /**
+     * Liste de toutes les combinaisons de priorisations possibles.
+     */
+    
+    List<int[]> listePriorisations(Player.Cards main) {
         List<int[]> results = new ArrayList<>();
         
         for (int i = 0; i < 9; i++) {
@@ -785,18 +1063,16 @@ class Player {
         return results;
     }
 
-    Ordre meilleureRelease(Etat etat, Cards mainOrigine) {
+    Ordre meilleureRelease(Etat etat) {
         String chevrons = "######6:";
+        cptAnaRelease++;
         
-        Cards mainReelle = mainOrigine.duplique();
-        if (etat.cardsLocations.get("AUTOMATED") != null) {
-            mainReelle.ajoute(etat.cardsLocations.get("AUTOMATED"));
-        }
+        Cards mainReelle = etat.main.duplique().ajoute(etat.automated);
         
         Ordre ordre = new Ordre();
         ordre.dette = MAX_DETTE;
                 
-        logDebug(chevrons, "mainReelle ", mainReelle, "mainOrigine", mainOrigine);
+        logDebug(chevrons, "mainReelle ", mainReelle);
         
         int meilleureDette = MAX_DETTE;
         Application appliSelected = null;
@@ -815,29 +1091,74 @@ class Player {
             }
         }
 
-        if (appliSelected != null) {
-            ordre.id = appliSelected.id;
+        if (appliSelected != null && detteAcceptable(etat, meilleureDette)) {
+            ordre.idAppli = appliSelected.id;
             ordre.dette = meilleureDette;
             logDebug(chevrons, "Appli selected", appliSelected.id, "dette", meilleureDette);
+        } else {
+            ordre = calculProbaApplicationSuivante(etat);
         }
+                
         return ordre;
         
     }
 
-    private int calculAjoutDette(Cards mainReelle, Application application) {
+    /**
+     * Choix du meilleur ordre.
+     */
+    Ordre choixMeilleurOrdre(Ordre ordre1, Ordre ordre2) {
+        
+        // S'il n'y a qu'un seul ordre, on le choisit d'office.
+        
+        if (ordre1 == null) {
+            return ordre2;
+        } else if (ordre2 == null) {
+            return ordre1;
+        }
+        
+        // On choisit un ordre qui réalise une application
+        
+        if (ordre1.idAppli == NO_APPLI && ordre2.idAppli != NO_APPLI) {
+            return ordre2;
+        } else if (ordre1.idAppli != NO_APPLI && ordre2.idAppli == NO_APPLI) {
+            return ordre1;
+        }
+
+        // On choisit la meilleure dette ou sinon la meilleur proba de faire une appli par la suite
+        
+        if (ordre1.idAppli != NO_APPLI && ordre2.idAppli != NO_APPLI && ordre1.dette != ordre2.dette) {
+            if (ordre1.dette < ordre2.dette) {
+                return ordre1;
+            } else {
+                return ordre2;
+            }
+        } else {
+            if (ordre1.probaAppliSuiv > ordre2.probaAppliSuiv) {
+                return ordre1;
+            } else {
+                return ordre2;
+            }
+        }
+    }
+    
+    /**
+     * Calcul de l'ajout de dette si on fait l'application avec la main.
+     */
+    
+    private int calculAjoutDette(Cards main, Application application) {
         
         int dette = INFAISABLE;
 
-        int tasksOk = mainReelle.c[8];
-        int tasksBaclees = mainReelle.c[8];
+        int tasksOk = main.c[8];
+        int tasksBaclees = main.c[8];
          
         for (int i = 0; i < 8; i++) {
-            tasksOk += Math.min(application.tasks.c[i], mainReelle.c[i] * 2);
-            tasksBaclees += mainReelle.c[i] * 2;
+            tasksOk += Math.min(application.tasks.c[i], main.c[i] * 2);
+            tasksBaclees += main.c[i] * 2;
         }
         
-        if (tasksOk + tasksBaclees >= application.getTaskCount()) {
-            dette = application.getTaskCount() - tasksOk;
+        if (tasksOk + tasksBaclees >= NB_TACHES) {
+            dette = NB_TACHES - tasksOk;
         }
         
         //logDebug("dette", dette, "tasksOk", tasksOk, "tasksBaclees", tasksBaclees, "appli", application.getTaskCount());
@@ -880,24 +1201,41 @@ class Player {
         //or OPPONENT_CARDS (AUTOMATED and OPPONENT_AUTOMATED will appear in later leagues)
         Map<String, Cards> cardsLocations = new HashMap<>();
         Cards main = null;
+        Cards pioche = null;
+        Cards defausse = null;
+        Cards automated;
         
         List<String> actionsPossibles = new ArrayList<>();
         List<Deplacement> deplacements = new ArrayList<>();
+        
+        @Override
+        public String toString() {
+            return "Etat [moi=" + moi + ", main=" + main + ", pioche=" + pioche
+                    + ", defausse=" + defausse + ", automated=" + automated + "]";
+        }
+        
     }
 
     class Ordre {
+        
         Deplacement depl = null;
-        int id = -1;
-        int dette = 0;
+        int idAppli = -1;
+        int dette = INFAISABLE;
+        int score = 0;
+
+        double probaAppliSuiv = 0D;
+        int appliSuivId = -1;
+        
         int[] throwCards = new int[] {-2, -2};
-        int[] prio = new int[] {-1, -1};
+        int[] playCard = new int[] {-1, -1, -1};
         int giveCard = -1;
         
         @Override
         public String toString() {
-            return "Ordre [depl=" + depl + ", id=" + id + ", dette=" + dette + ", throwCards=" +
-                    Arrays.toString(throwCards) + ", giveCard=" + giveCard + ", prios=" +
-                    Arrays.toString(prio) + "]";
+            return "Ordre [depl=" + depl + ", idAppli=" + idAppli + ", dette=" + dette
+                    + ", probaAppliSuiv=" + probaAppliSuiv + ", appliSuivId=" + appliSuivId
+                    + ", throwCards=" + Arrays.toString(throwCards)
+                    + ", giveCard=" + giveCard + ", playCard=" + Arrays.toString(playCard) + "]";
         }
         
     }
@@ -967,6 +1305,10 @@ class Player {
             return this;
         }
 
+        int getCount() {
+            return IntStream.of(c).sum();
+        }
+        
         Cards duplique() {
             int[] newCards = new int[10];
             for (int i = 0; i < newCards.length; i++) {
@@ -1041,6 +1383,20 @@ class Player {
         
     }
 
+    static String[] titreCartes = new String[] {"TRAINING", "CODING", "DAILY_ROUTINE", "TASK_PRIORITIZATION", 
+        "ARCHITECTURE_STUDY", "CONTINUOUS_INTEGRATION", "CODE_REVIEW", "REFACTORING"};
+    
+    private static final int TRA = 0;
+    private static final int COD = 1;
+    private static final int DAI = 2;
+    private static final int PRI = 3;
+    private static final int ARC = 4;
+    private static final int CI = 5;
+    private static final int REV = 6;
+    private static final int REF = 7;
+    private static final int BON = 8;
+    private static final int DET = 9;
+
     /*
     Développement CODING (1). L’équipe pioche 1 carte de sa pioche et peut jouer deux cartes de plus.
 
@@ -1062,7 +1418,10 @@ class Player {
     Cette carte ne sera pas défaussée à la fin du tour (elle sera toujours disponible) et ne pourra servir que pour livrer une application.
     */
     
+    static int NO_APPLI = -1;
+    
     // De la plus faible à la plus forte
+    // TODO : A supprimer ?        
     private static final int[] PRIORITE = new int[] {1, 0, 6, 7, 4, 3, 2, 5};
     
     int[][] proche = new int[][] {
@@ -1076,10 +1435,11 @@ class Player {
         {1, 0, 0, 0, 0, 0, 1, 1}        
     }; 
     
-    private static final int PRI = 3;
-    
     /* Codingame common */
-
+    void setTimeOut(long newValue) {
+        TIME_OUT = newValue;
+    }
+    
     static boolean doLog = true;
     static boolean doLogDebug = false;
     static String[] logFilters = null;

@@ -1,3 +1,4 @@
+package codingame.spreadingfire;
 
 import java.io.InputStream;
 
@@ -9,10 +10,9 @@ public class PlayerTest {
             //test(player); System.exit(0);
             
             InputStream inStream = player.getClass().getClassLoader()
-                    .getResourceAsStream("input.txt");
+                    .getResourceAsStream("codingame/spreadingfire/input.txt");
             player.activateLog();
             player.activateLogDebug();
-            player.setTimeOut(10000);
             player.joue(inStream);
 
         } catch (Exception e) {
