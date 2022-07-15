@@ -5,14 +5,13 @@ public class PlayerTest {
 
     public static void main(String args[]) {
         try {
-            Player player = new Player();
+            PlayerBase player = new PlayerBase();
             //test(player); System.exit(0);
             
             InputStream inStream = player.getClass().getClassLoader()
                     .getResourceAsStream("input.txt");
             player.activateLog();
             player.activateLogDebug();
-            player.setTimeOut(10000);
             player.joue(inStream);
 
         } catch (Exception e) {
