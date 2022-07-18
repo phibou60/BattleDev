@@ -1,0 +1,4 @@
+2
+crazyHouse 0
+maxMoves 125
+k7/8/8/p2b4/5pp1/4p3/6r1/1K2R3 b - - 13 102

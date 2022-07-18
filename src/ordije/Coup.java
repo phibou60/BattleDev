@@ -17,6 +17,15 @@ class Coup {
     // Promotion du pion
     Promo promo;
     
+    // Si le coup est obtenur par la bibliotheque
+    private String directUci;
+    private String representation;
+    
+    public Coup(String directUci) {
+        super();
+        this.directUci = directUci;
+    }
+    
     public Coup(int from, int to) {
         super();
         this.from = from;
@@ -53,12 +62,34 @@ class Coup {
     };
     
     String toUci() {
+        if (directUci != null) return directUci;
+        
         String uci = coords[from]+coords[to];
         if (promo == Promo.B) uci += 'b';
         if (promo == Promo.Q) uci += 'q';
         if (promo == Promo.N) uci += 'n';
         if (promo == Promo.R) uci += 'r';
+        directUci = uci;
         return uci;
     }
     
+    @Override
+    public String toString() {
+        if (representation != null) return representation;
+        StringBuilder sb = new StringBuilder();
+        
+        //sb.append(pieceMvt);
+        sb.append(coords[from]);
+        if (spec == Special.PRISE) sb.append("x");
+        sb.append(coords[to]);
+        
+        if (promo == Promo.B) sb.append(":b");
+        if (promo == Promo.Q) sb.append(":q");
+        if (promo == Promo.N) sb.append(":n");
+        if (promo == Promo.R) sb.append(":r");
+
+        representation = sb.toString();
+        return representation;
+    }
+   
 }

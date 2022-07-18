@@ -1,6 +1,5 @@
 package ordije;
 
-import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -78,6 +77,32 @@ class Echiquier {
         }
         
         return new Echiquier(table, splits[1].charAt(0), splits[2], splits[3], Integer.parseInt(splits[4]), Integer.parseInt(splits[5]));
+    }
+    
+    String getFen1() {
+        
+        StringBuilder out = new StringBuilder();
+        
+        for (int l = 0; l < 8; l++) {
+            for (int c = 0; c < 8; c++) {
+                char piece = table[l * 8 + c];
+                if (piece == ' ') piece = '1';
+                out.append(piece);
+            }
+            out.append("/");
+        }
+        
+        String result = out.toString();
+        
+        result = result.replace("11111111", "8");
+        result = result.replace("1111111", "7");
+        result = result.replace("111111", "6");
+        result = result.replace("11111", "5");
+        result = result.replace("1111", "4");
+        result = result.replace("111", "3");
+        result = result.replace("11", "2");
+                
+        return result;
     }
     
     /**
